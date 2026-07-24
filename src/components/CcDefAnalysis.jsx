@@ -476,7 +476,19 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
             }
         });
 
-        visits.forEach(v => {
+        // Filter visits to selected date range to prevent extreme lag
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+
+        const periodVisits = visits.filter(v => {
+            const d = parseDateLocal(v.visit_date);
+            if (!d) return false;
+            if (start && d < start) return false;
+            if (end && d > end) return false;
+            return true;
+        });
+
+        periodVisits.forEach(v => {
             const cc = String(v.visitor_name || '').trim();
             if (!cc || !ccScores[cc]) return;
 
@@ -491,9 +503,9 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
             const postStart = new Date(vDate.getTime() + 1 * 86400000);
             const postEnd = new Date(vDate.getTime() + 11 * 86400000);
 
-            const inRange = (dStr, start, end) => {
+            const inRange = (dStr, startRange, endRange) => {
                 const d = parseDateLocal(dStr);
-                return d && d >= start && d <= end;
+                return d && d >= startRange && d <= endRange;
             };
 
             const schoolEdustat = edustatByUdiseMap[udise] || [];
@@ -525,7 +537,7 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                 totalImpact: Math.min(100, totalImpact)
             };
         }).sort((a, b) => b.totalImpact - a.totalImpact);
-    }, [schools, visits, edustatByUdiseMap, jhpmsByUdiseMap]);
+    }, [schools, visits, edustatByUdiseMap, jhpmsByUdiseMap, startDate, endDate]);
 
     // Compute live warning alerts for the selected coordinator's schools
     const activeAlerts = useMemo(() => {
@@ -3430,6 +3442,7 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                     const jd = parseDateLocal(j.date);
                     return jd && (Date.now() - jd.getTime()) <= 7 * 86400000;
                 });
+                const avgClasses = last7DaysJhpms.length / 7;
                 const schoolChecklist = (visitsChecklist && visitsChecklist[selectedPreBriefUdise]) || {};
                 const syncChecked = !!schoolChecklist.syncChecked;
                 const installChecked = !!schoolChecklist.installChecked;
