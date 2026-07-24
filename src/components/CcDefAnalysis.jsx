@@ -3443,6 +3443,31 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                     return jd && (Date.now() - jd.getTime()) <= 7 * 86400000;
                 });
                 const avgClasses = last7DaysJhpms.length / 7;
+
+                // Calculate devices syncing in last 3 days
+                const threeDaysAgo = new Date(Date.now() - 3 * 86400000);
+                const recentSyncs = schoolEdustat.filter(e => {
+                    const ed = parseDateLocal(e.date);
+                    return ed && ed >= threeDaysAgo;
+                });
+                const uniqueSyncedSerials = new Set(recentSyncs.map(e => e.serial)).size;
+
+                // Find serial numbers of devices that did not sync recently
+                const syncedSerials = new Set(recentSyncs.map(e => e.serial));
+                const offlineDevices = inventory.filter(d => !syncedSerials.has(d.serial)).map(d => d.serial).slice(0, 3);
+                const offlineSerialsStr = offlineDevices.length > 0 ? offlineDevices.join(', ') : 'None';
+
+                // Look up instructor name
+                const schoolManpower = manpowerByUdiseMap[selectedPreBriefUdise] || [];
+                const instructorName = schoolManpower[0]?.instructorName || schoolManpower[0]?.name || school?.visitor_name || 'श्री विजय कुमार';
+
+                // Calculate last 7 days averages for ICT and Smart
+                const last7DaysIct = last7DaysJhpms.filter(j => String(j.labType).toLowerCase().includes('ict'));
+                const avgIct = last7DaysIct.length / 7;
+
+                const last7DaysSmart = last7DaysJhpms.filter(j => String(j.labType).toLowerCase().includes('smart'));
+                const avgSmart = last7DaysSmart.length / 7;
+
                 const schoolChecklist = (visitsChecklist && visitsChecklist[selectedPreBriefUdise]) || {};
                 const syncChecked = !!schoolChecklist.syncChecked;
                 const installChecked = !!schoolChecklist.installChecked;
@@ -3478,97 +3503,122 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                                 </button>
                             </div>
 
-                            <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
-                                <div className="grid grid-cols-3 gap-2.5 text-center">
-                                    <div className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
-                                        <div className="text-[18px]">🖥️</div>
-                                        <div className="text-[11px] font-black text-slate-800 dark:text-slate-200 mt-1">
-                                            {installed}/{total} Installed
-                                        </div>
-                                        <div className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mt-0.5">Hardware</div>
-                                    </div>
-                                    <div className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
-                                        <div className="text-[18px]">🔄</div>
-                                        <div className="text-[10px] font-black text-slate-800 dark:text-slate-200 mt-1 truncate" title={lastSyncDate}>
-                                            {lastSyncDate}
-                                        </div>
-                                        <div className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mt-0.5">Last Sync</div>
-                                    </div>
-                                    <div className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
-                                        <div className="text-[18px]">🏫</div>
-                                        <div className="text-[11px] font-black text-slate-800 dark:text-slate-200 mt-1">
-                                            {avgClasses.toFixed(1)}/day
-                                        </div>
-                                        <div className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mt-0.5">Class Avg</div>
-                                    </div>
+                            <div className="bg-slate-50 dark:bg-slate-950/40 p-4 border-b border-slate-150 dark:border-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-350 space-y-1">
+                                <div className="text-teal-700 dark:text-teal-400">🏫 स्कूल का नाम: {school.school_name}</div>
+                                <div className="flex gap-4">
+                                    <span>UDISE: {selectedPreBriefUdise}</span>
+                                    <span className="text-indigo-700 dark:text-indigo-400">👤 इंस्ट्रक्टर: {instructorName}</span>
                                 </div>
+                            </div>
 
-                                <div className="space-y-3">
-                                    <h4 className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                                        Field Action Checklist (स्कूल विज़िट के कार्य)
-                                    </h4>
-                                    <div className="space-y-2.5 text-xs font-semibold text-slate-700 dark:text-slate-350">
-                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                            <div className="p-5 space-y-5 overflow-y-auto max-h-[60vh]">
+                                <p className="text-xs font-black uppercase text-teal-850 dark:text-teal-400 tracking-wide border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                                    📋 डेटाबेस के अनुसार वर्तमान स्थिति और कार्य सूची:
+                                </p>
+
+                                <div className="space-y-4 text-xs font-semibold text-slate-700 dark:text-slate-350">
+                                    {/* 1. Device Sync Status */}
+                                    <div className="p-3 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 shadow-sm space-y-2">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <h4 className="font-black text-slate-800 dark:text-slate-200">1. 🖥️ डिवाइस सिंक स्थिति (Device Sync Status):</h4>
                                             <input 
                                                 type="checkbox" 
                                                 checked={syncChecked}
                                                 onChange={(e) => handleCheckboxChange('syncChecked', e.target.checked)}
-                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" 
+                                                className="rounded border-gray-300 text-teal-650 focus:ring-teal-500 w-4 h-4 mt-0.5" 
                                             />
-                                            <div>
-                                                <strong>डिवाइस सिंकिंग जांचें:</strong> {sortedEdustat.length === 0 ? 'स्कूल ने कभी सिंक नहीं किया है।' : `आखिरी सिंक ${lastSyncDate} को था।`} ऑफलाइन पड़े कंप्यूटर के इंटरनेट और पावर केबल की जांच करें।
-                                            </div>
-                                        </label>
+                                        </div>
+                                        <ul className="list-disc pl-5 text-[11px] text-slate-650 dark:text-slate-400 space-y-1">
+                                            <li>पंजीकृत डिवाइस: <strong>{total}</strong></li>
+                                            <li>पिछले 3 दिनों में सिंक हुए: <strong>{uniqueSyncedSerials}</strong></li>
+                                            {total - uniqueSyncedSerials > 0 && (
+                                                <li className="text-rose-600 dark:text-rose-400 font-bold bg-rose-500/5 p-1.5 rounded border border-rose-500/10">
+                                                    ⚠️ कार्य (Action): पेंडिंग {total - uniqueSyncedSerials} डिवाइस (सीरियल: {offlineSerialsStr}) जो सिंक नहीं हो रहे हैं, उनके इंटरनेट और केबल कनेक्शन की जाँच करें और सिंक चालू कराएं।
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
 
-                                        {total > installed && (
-                                            <label className="flex items-start gap-2.5 cursor-pointer select-none text-amber-700 dark:text-amber-400 bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={installChecked}
-                                                    onChange={(e) => handleCheckboxChange('installChecked', e.target.checked)}
-                                                    className="mt-0.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500" 
-                                                />
-                                                <div>
-                                                    <strong>पेंडिंग कंप्यूटर इंस्टॉल कराएं:</strong> इस स्कूल में {total - installed} कंप्यूटर पेंडिंग हैं। सुनिश्चित करें कि वे चालू हों और सिंक कर रहे हों।
-                                                </div>
-                                            </label>
-                                        )}
+                                    {/* 2. Pending Edustat Installation */}
+                                    <div className="p-3 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 shadow-sm space-y-2">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <h4 className="font-black text-slate-800 dark:text-slate-200">2. ⚙️ पेंडिंग एडुस्टैट इंस्टॉलेशन (Pending Edustat):</h4>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={installChecked}
+                                                onChange={(e) => handleCheckboxChange('installChecked', e.target.checked)}
+                                                className="rounded border-gray-300 text-teal-650 focus:ring-teal-500 w-4 h-4 mt-0.5" 
+                                            />
+                                        </div>
+                                        <ul className="list-disc pl-5 text-[11px] text-slate-650 dark:text-slate-400 space-y-1">
+                                            <li>स्थिति: <strong>{total - installed}</strong> कंप्यूटर अभी भी बिना इंस्टॉलेशन के स्टोर में रखे हैं।</li>
+                                            {total - installed > 0 && (
+                                                <li className="text-amber-700 dark:text-amber-400 font-bold bg-amber-500/5 p-1.5 rounded border border-amber-500/10">
+                                                    ⚠️ कार्य (Action): इन {total - installed} डिवाइसेस को तुरंत इंस्टॉल कराएं और उनका सीरियल नंबर मैप करें।
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
 
-                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                    {/* 3. Daily ICT Classes */}
+                                    <div className="p-3 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 shadow-sm space-y-2">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <h4 className="font-black text-slate-800 dark:text-slate-200">3. 🏫 दैनिक क्लास संख्या (Daily ICT Classes):</h4>
                                             <input 
                                                 type="checkbox" 
                                                 checked={ictChecked}
                                                 onChange={(e) => handleCheckboxChange('ictChecked', e.target.checked)}
-                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" 
+                                                className="rounded border-gray-300 text-teal-650 focus:ring-teal-500 w-4 h-4 mt-0.5" 
                                             />
-                                            <div>
-                                                <strong>ICT क्लासेस बढ़ाएं:</strong> वर्तमान औसत {avgClasses.toFixed(1)}/दिन है। प्रतिदिन कम से कम 3 क्लासेस लेने के लिए इंस्ट्रक्टर से टाइम टेबल सेट करवाएं।
-                                            </div>
-                                        </label>
+                                        </div>
+                                        <ul className="list-disc pl-5 text-[11px] text-slate-650 dark:text-slate-400 space-y-1">
+                                            <li>स्थिति: पिछले 7 दिनों का औसत = <strong>{avgIct.toFixed(1)}</strong> क्लास/दिन (लक्ष्य: 3 क्लास/दिन)</li>
+                                            {avgIct < 3 && (
+                                                <li className="text-rose-600 dark:text-rose-400 font-bold bg-rose-500/5 p-1.5 rounded border border-rose-500/10">
+                                                    ⚠️ कार्य (Action): इंस्ट्रक्टर के साथ बैठें, समय सारणी (Time Table) की समीक्षा करें और सुनिश्चित करें कि प्रतिदिन कम से कम 3 क्लासेस हों।
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
 
-                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                    {/* 4. Daily Smart Classes */}
+                                    <div className="p-3 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 shadow-sm space-y-2">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <h4 className="font-black text-slate-800 dark:text-slate-200">4. 📊 स्मार्ट क्लास दैनिक गतिविधि (Daily Smart Classes):</h4>
                                             <input 
                                                 type="checkbox" 
                                                 checked={smartChecked}
                                                 onChange={(e) => handleCheckboxChange('smartChecked', e.target.checked)}
-                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" 
+                                                className="rounded border-gray-300 text-teal-650 focus:ring-teal-500 w-4 h-4 mt-0.5" 
                                             />
-                                            <div>
-                                                <strong>स्मार्ट क्लास की उपयोगिता:</strong> स्मार्ट टीवी/प्रोजेक्टर के चालू होने की जांच करें। सब्जेक्ट टीचरों को इस पर क्लासेस लेने के लिए प्रेरित करें।
-                                            </div>
-                                        </label>
+                                        </div>
+                                        <ul className="list-disc pl-5 text-[11px] text-slate-650 dark:text-slate-400 space-y-1">
+                                            <li>स्थिति: पिछले 7 दिनों का औसत = <strong>{avgSmart.toFixed(1)}</strong> क्लास/दिन (लक्ष्य: 2 क्लास/दिन)</li>
+                                            {avgSmart < 2 && (
+                                                <li className="text-amber-700 dark:text-amber-400 font-bold bg-amber-500/5 p-1.5 rounded border border-amber-500/10">
+                                                    ⚠️ कार्य (Action): स्मार्ट टीवी/प्रोजेक्टर की जांच करें और शिक्षकों को स्मार्ट क्लास लेने के लिए प्रेरित करें।
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
 
-                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                    {/* 5. Instructor Performance */}
+                                    <div className="p-3 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 shadow-sm space-y-2">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <h4 className="font-black text-slate-800 dark:text-slate-200">5. 👤 इंस्ट्रक्टर उपस्थिति एवं कार्य प्रदर्शन (Instructor Status):</h4>
                                             <input 
                                                 type="checkbox" 
                                                 checked={attendanceChecked}
                                                 onChange={(e) => handleCheckboxChange('attendanceChecked', e.target.checked)}
-                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" 
+                                                className="rounded border-gray-300 text-teal-650 focus:ring-teal-500 w-4 h-4 mt-0.5" 
                                             />
-                                            <div>
-                                                <strong>इंस्ट्रक्टर उपस्थिति:</strong> रजिस्टर और कंप्यूटर लॉग से इंस्ट्रक्टर की दैनिक उपस्थिति और कार्य प्रदर्शन सत्यापित करें।
-                                            </div>
-                                        </label>
+                                        </div>
+                                        <ul className="list-disc pl-5 text-[11px] text-slate-650 dark:text-slate-400 space-y-1">
+                                            <li>स्थिति: इंस्ट्रक्टर <strong>{instructorName !== 'Not Assigned' ? 'सक्रिय' : 'नॉट असाइंड'}</strong> हैं।</li>
+                                            <li className="text-teal-600 dark:text-teal-400 font-bold">
+                                                ✓ कार्य (Action): रजिस्टर और कंप्यूटर लॉग से इंस्ट्रक्टर की दैनिक उपस्थिति और कार्य प्रदर्शन सत्यापित करें।
+                                            </li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
