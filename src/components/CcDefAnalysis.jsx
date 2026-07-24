@@ -251,7 +251,7 @@ const calculateAddressDistanceMeters = (inAddress, outAddress, udiseCode = null,
 };
 
 // ─── Main Component ────────────────────────────────────────────────────────────
-export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = [], edustat = [], startDate, endDate, ccNameMapping = {}, darkMode = false, onNavigateToSchool, manpower = [], edustatMaster = [], onDrillDown, visit360 = [] }) {
+export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = [], edustat = [], startDate, endDate, ccNameMapping = {}, darkMode = false, onNavigateToSchool, manpower = [], edustatMaster = [], onDrillDown, visit360 = [], visitsChecklist = {}, onSaveChecklist }) {
     const [selectedCC, setSelectedCC] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -3430,7 +3430,23 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                     const jd = parseDateLocal(j.date);
                     return jd && (Date.now() - jd.getTime()) <= 7 * 86400000;
                 });
-                const avgClasses = last7DaysJhpms.length / 7;
+                const schoolChecklist = (visitsChecklist && visitsChecklist[selectedPreBriefUdise]) || {};
+                const syncChecked = !!schoolChecklist.syncChecked;
+                const installChecked = !!schoolChecklist.installChecked;
+                const ictChecked = !!schoolChecklist.ictChecked;
+                const smartChecked = !!schoolChecklist.smartChecked;
+                const attendanceChecked = !!schoolChecklist.attendanceChecked;
+
+                const handleCheckboxChange = (field, checkedValue) => {
+                    if (onSaveChecklist) {
+                        const updated = {
+                            ...schoolChecklist,
+                            [field]: checkedValue,
+                            lastUpdated: new Date().toISOString()
+                        };
+                        onSaveChecklist(selectedPreBriefUdise, updated);
+                    }
+                };
 
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
@@ -3480,7 +3496,12 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                                     </h4>
                                     <div className="space-y-2.5 text-xs font-semibold text-slate-700 dark:text-slate-350">
                                         <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                                            <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" />
+                                            <input 
+                                                type="checkbox" 
+                                                checked={syncChecked}
+                                                onChange={(e) => handleCheckboxChange('syncChecked', e.target.checked)}
+                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" 
+                                            />
                                             <div>
                                                 <strong>डिवाइस सिंकिंग जांचें:</strong> {sortedEdustat.length === 0 ? 'स्कूल ने कभी सिंक नहीं किया है।' : `आखिरी सिंक ${lastSyncDate} को था।`} ऑफलाइन पड़े कंप्यूटर के इंटरनेट और पावर केबल की जांच करें।
                                             </div>
@@ -3488,7 +3509,12 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
 
                                         {total > installed && (
                                             <label className="flex items-start gap-2.5 cursor-pointer select-none text-amber-700 dark:text-amber-400 bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
-                                                <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={installChecked}
+                                                    onChange={(e) => handleCheckboxChange('installChecked', e.target.checked)}
+                                                    className="mt-0.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500" 
+                                                />
                                                 <div>
                                                     <strong>पेंडिंग कंप्यूटर इंस्टॉल कराएं:</strong> इस स्कूल में {total - installed} कंप्यूटर पेंडिंग हैं। सुनिश्चित करें कि वे चालू हों और सिंक कर रहे हों।
                                                 </div>
@@ -3496,21 +3522,36 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                                         )}
 
                                         <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                                            <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" />
+                                            <input 
+                                                type="checkbox" 
+                                                checked={ictChecked}
+                                                onChange={(e) => handleCheckboxChange('ictChecked', e.target.checked)}
+                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" 
+                                            />
                                             <div>
                                                 <strong>ICT क्लासेस बढ़ाएं:</strong> वर्तमान औसत {avgClasses.toFixed(1)}/दिन है। प्रतिदिन कम से कम 3 क्लासेस लेने के लिए इंस्ट्रक्टर से टाइम टेबल सेट करवाएं।
                                             </div>
                                         </label>
 
                                         <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                                            <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" />
+                                            <input 
+                                                type="checkbox" 
+                                                checked={smartChecked}
+                                                onChange={(e) => handleCheckboxChange('smartChecked', e.target.checked)}
+                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" 
+                                            />
                                             <div>
                                                 <strong>स्मार्ट क्लास की उपयोगिता:</strong> स्मार्ट टीवी/प्रोजेक्टर के चालू होने की जांच करें। सब्जेक्ट टीचरों को इस पर क्लासेस लेने के लिए प्रेरित करें।
                                             </div>
                                         </label>
 
                                         <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                                            <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" />
+                                            <input 
+                                                type="checkbox" 
+                                                checked={attendanceChecked}
+                                                onChange={(e) => handleCheckboxChange('attendanceChecked', e.target.checked)}
+                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" 
+                                            />
                                             <div>
                                                 <strong>इंस्ट्रक्टर उपस्थिति:</strong> रजिस्टर और कंप्यूटर लॉग से इंस्ट्रक्टर की दैनिक उपस्थिति और कार्य प्रदर्शन सत्यापित करें।
                                             </div>

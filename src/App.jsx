@@ -263,6 +263,7 @@ const App = () => {
     const [edustatMaster, setEdustatMaster] = useState([]);
     const [manpower, setManpower] = useState([]);
     const [visit360, setVisit360] = useState([]);
+    const [visitsChecklist, setVisitsChecklist] = useState({});
     
     // Temporary Session states (Hybrid Sandbox)
     const [tempVisits, setTempVisits] = useState([]);
@@ -328,6 +329,23 @@ const App = () => {
     const handleNavigateToSchool = useCallback((udise) => {
         setDrillToUdise(udise);
         setActiveTab('school-search');
+    }, []);
+
+    const handleSaveChecklist = useCallback(async (udise, schoolChecklistState) => {
+        try {
+            setVisitsChecklist(prev => {
+                const updated = {
+                    ...prev,
+                    [udise]: schoolChecklistState
+                };
+                set('visits_checklist', updated).catch(e => {
+                    console.error("Async set error in background:", e);
+                });
+                return updated;
+            });
+        } catch (err) {
+            console.error("Failed to save checklist:", err);
+        }
     }, []);
 
     const [isAuthenticated, setIsAuthenticated] = useState(
@@ -849,12 +867,12 @@ const App = () => {
                 }
 
                 // 2. Load baseline datasets from storage in parallel
-                let s, v, jl, e, em, m, p, vMeta, jlMeta, eMeta, v360, v360Meta;
+                let s, v, jl, e, em, m, p, vMeta, jlMeta, eMeta, v360, v360Meta, vChecklist;
                 let userV = [], userJl = [], userE = [];
                 let userVM = null, userJlM = null, userEM = null;
 
                 if (resolvedRole === 'admin') {
-                    const [resSchools, resVisits, resJhpms, resEdustat, resEdustatMaster, resManpower, resPhoto, resVMeta, resJlMeta, resEMeta, resV360, resV360Meta] = await Promise.all([
+                    const [resSchools, resVisits, resJhpms, resEdustat, resEdustatMaster, resManpower, resPhoto, resVMeta, resJlMeta, resEMeta, resV360, resV360Meta, resChecklist] = await Promise.all([
                         get('schools'),
                         get('visits'),
                         get('jhpms_lab'),
@@ -866,7 +884,8 @@ const App = () => {
                         get('jhpms_lab_meta'),
                         get('edustat_meta'),
                         get('visit360'),
-                        get('visit360_meta')
+                        get('visit360_meta'),
+                        get('visits_checklist')
                     ]);
                     s = resSchools;
                     v = resVisits;
@@ -880,6 +899,7 @@ const App = () => {
                     eMeta = resEMeta;
                     v360 = resV360;
                     v360Meta = resV360Meta;
+                    vChecklist = resChecklist;
                 } else {
                     const [
                         adminSchools,
@@ -901,7 +921,8 @@ const App = () => {
                         resPhoto,
                         resEdustatMaster,
                         adminVisit360,
-                        adminVisit360Meta
+                        adminVisit360Meta,
+                        resChecklist
                     ] = await Promise.all([
                         get('schools', 'admin_'),
                         get('manpower', 'admin_'),
@@ -922,7 +943,8 @@ const App = () => {
                         get('profile_photo'),
                         get('edustat_master'),
                         get('visit360', 'admin_'),
-                        get('visit360_meta', 'admin_')
+                        get('visit360_meta', 'admin_'),
+                        get('visits_checklist')
                     ]);
                     s = adminSchools;
                     m = adminManpower;
@@ -930,6 +952,7 @@ const App = () => {
                     p = resPhoto;
                     v360 = adminVisit360;
                     v360Meta = adminVisit360Meta;
+                    vChecklist = resChecklist;
                     
                     v = mergeVisits(adminVisits, customVisits);
                     jl = mergeJhpms(adminJhpms, customJhpms);
@@ -1104,6 +1127,8 @@ const App = () => {
                 if (filteredManpower.length > 0) setManpower(filteredManpower);
                 if (filteredVisit360 && filteredVisit360.length > 0) setVisit360(filteredVisit360);
                 if (v360Meta) setVisit360Meta(v360Meta);
+                if (vChecklist) setVisitsChecklist(vChecklist);
+                else setVisitsChecklist({});
                 
                 // Save user specific overlay states
                 setUserVisits(filteredUserVisits);
@@ -2274,7 +2299,7 @@ const App = () => {
         if (activeTab === 'district-performance') return <DistrictPerformance schools={schools} visits={combinedVisits} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} workingDays={workingDays} ccNameMapping={ccNameMapping} onRegisterExport={setCustomExportHandler} userPermissions={userPermissions} />;
         if (activeTab === 'school-performance') return <SchoolPerformance schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} onRegisterExport={setCustomExportHandler} userPermissions={userPermissions} />;
         if (activeTab === 'school-search') return <SchoolWiseSearch schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} visits={combinedVisits} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} darkMode={darkMode} onDrillDown={handleDrillDown} initialUdise={drillToUdise} />;
-        if (activeTab === 'cc-analysis') return <CcDefAnalysis schools={schools} visits={combinedVisits} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} startDate={startDate} endDate={endDate} ccNameMapping={ccNameMapping} darkMode={darkMode} onNavigateToSchool={handleNavigateToSchool} manpower={manpower} edustatMaster={edustatMaster} onDrillDown={handleDrillDown} visit360={visit360} />;
+        if (activeTab === 'cc-analysis') return <CcDefAnalysis schools={schools} visits={combinedVisits} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} startDate={startDate} endDate={endDate} ccNameMapping={ccNameMapping} darkMode={darkMode} onNavigateToSchool={handleNavigateToSchool} manpower={manpower} edustatMaster={edustatMaster} onDrillDown={handleDrillDown} visit360={visit360} visitsChecklist={visitsChecklist} onSaveChecklist={handleSaveChecklist} />;
         if (activeTab === 'plan') return <PlanView data={processedData} allVisits={combinedVisits} manpower={manpower} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} schools={schools} startDate={startDate} endDate={endDate} />;
         if (activeTab === 'compliance') return <ComplianceView data={processedData} />;
         if (activeTab === 'reports') return <ReportsView data={processedData} />;
