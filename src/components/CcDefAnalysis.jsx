@@ -416,7 +416,7 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
             const preSmartClasses = preJhpms.filter(j => String(j.labType).toLowerCase().includes('smart')).length;
             const postSmartClasses = postJhpms.filter(j => String(j.labType).toLowerCase().includes('smart')).length;
             const preAvgSmart = preSmartClasses / 10;
-            const postAvgSmart = postAvgSmart / 10;
+            const postAvgSmart = postSmartClasses / 10;
 
             // Edustat Master (inventory)
             const inventory = edustatMaster.filter(em => String(em.udise).trim() === udise);
