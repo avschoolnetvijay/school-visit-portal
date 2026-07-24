@@ -257,6 +257,7 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [isMatrixExpanded, setIsMatrixExpanded] = useState(false);
     const [selectedAnalysisTab, setSelectedAnalysisTab] = useState('performance');
+    const [selectedPreBriefUdise, setSelectedPreBriefUdise] = useState(null);
     const [expandedInsights, setExpandedInsights] = useState({});
     const toggleInsight = (id) => {
         setExpandedInsights(prev => ({ ...prev, [id]: !prev[id] }));
@@ -362,6 +363,230 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
         });
         return Array.from(names).sort();
     }, [schools, visits]);
+
+    // Compute visit impact and outcomes for selected CC
+    const visitOutcomes = useMemo(() => {
+        if (!selectedCC) return [];
+        
+        // Filter visits for selected CC
+        const ccVisits = visits.filter(v => {
+            const name = v.visitor_name || v.cc_name || v.def_name || '';
+            return name.trim().toLowerCase() === selectedCC.trim().toLowerCase();
+        });
+
+        return ccVisits.map(v => {
+            const udise = String(v.udise_code || '').trim();
+            const schoolObj = schoolsMap[udise];
+            const vDate = parseDateLocal(v.visit_date);
+            if (!vDate || isNaN(vDate.getTime())) return null;
+
+            // Window: 10 days before and 10 days after (excluding visit date)
+            const preStart = new Date(vDate.getTime() - 11 * 86400000);
+            const preEnd = new Date(vDate.getTime() - 1 * 86400000);
+            const postStart = new Date(vDate.getTime() + 1 * 86400000);
+            const postEnd = new Date(vDate.getTime() + 11 * 86400000);
+
+            // Helper to check if a date is within range
+            const inRange = (dStr, start, end) => {
+                const d = parseDateLocal(dStr);
+                return d && d >= start && d <= end;
+            };
+
+            // 1. Edustat (Usage Hours & Sync Days)
+            const schoolEdustat = edustatByUdiseMap[udise] || [];
+            const preEdustat = schoolEdustat.filter(e => inRange(e.date, preStart, preEnd));
+            const postEdustat = schoolEdustat.filter(e => inRange(e.date, postStart, postEnd));
+
+            const preAvgHours = preEdustat.length > 0 ? preEdustat.reduce((sum, e) => sum + Number(e.hours || 0), 0) / 10 : 0;
+            const postAvgHours = postEdustat.length > 0 ? postEdustat.reduce((sum, e) => sum + Number(e.hours || 0), 0) / 10 : 0;
+
+            const preSyncDays = new Set(preEdustat.map(e => e.date)).size;
+            const postSyncDays = new Set(postEdustat.map(e => e.date)).size;
+
+            // 2. JHPMS (ICT & Smart Classes)
+            const schoolJhpms = jhpmsByUdiseMap[udise] || [];
+            const preJhpms = schoolJhpms.filter(j => inRange(j.date, preStart, preEnd));
+            const postJhpms = schoolJhpms.filter(j => inRange(j.date, postStart, postEnd));
+
+            const preIctClasses = preJhpms.filter(j => String(j.labType).toLowerCase().includes('ict')).length;
+            const postIctClasses = postJhpms.filter(j => String(j.labType).toLowerCase().includes('ict')).length;
+            const preAvgIct = preIctClasses / 10;
+            const postAvgIct = postIctClasses / 10;
+
+            const preSmartClasses = preJhpms.filter(j => String(j.labType).toLowerCase().includes('smart')).length;
+            const postSmartClasses = postJhpms.filter(j => String(j.labType).toLowerCase().includes('smart')).length;
+            const preAvgSmart = preSmartClasses / 10;
+            const postAvgSmart = postAvgSmart / 10;
+
+            // Edustat Master (inventory)
+            const inventory = edustatMaster.filter(em => String(em.udise).trim() === udise);
+            const totalDevices = inventory.length;
+            const installedDevices = inventory.filter(em => String(em.installed).toLowerCase().includes('yes') || String(em.status).toLowerCase().includes('install')).length;
+
+            const deltaHours = postAvgHours - preAvgHours;
+            const deltaSync = postSyncDays - preSyncDays;
+            const deltaIct = postAvgIct - preAvgIct;
+            const deltaSmart = postAvgSmart - preAvgSmart;
+
+            let impact = 'No Impact';
+            let color = 'text-red-650 bg-red-50 dark:bg-red-950/20 border-red-200/50';
+            if (deltaHours > 1.0 || deltaIct > 0.5 || deltaSync > 2) {
+                impact = 'High Impact';
+                color = 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-250';
+            } else if (deltaHours > 0.1 || deltaIct > 0.1 || deltaSync > 0) {
+                impact = 'Low Impact';
+                color = 'text-amber-700 bg-amber-50 dark:bg-amber-950/20 border-amber-250';
+            }
+
+            return {
+                visitDate: v.visit_date,
+                visitType: v.visit_type,
+                udise,
+                schoolName: schoolObj?.school_name || 'Unknown School',
+                preAvgHours,
+                postAvgHours,
+                preSyncDays,
+                postSyncDays,
+                preAvgIct,
+                postAvgIct,
+                preAvgSmart,
+                postAvgSmart,
+                totalDevices,
+                installedDevices,
+                deltaHours,
+                deltaSync,
+                deltaIct,
+                deltaSmart,
+                impact,
+                color
+            };
+        }).filter(Boolean).sort((a, b) => new Date(b.visitDate) - new Date(a.visitDate));
+    }, [selectedCC, visits, schoolsMap, edustatByUdiseMap, jhpmsByUdiseMap, edustatMaster]);
+
+    // Compute leaderboard data for all CCs based on visit impact scores
+    const leaderBoardData = useMemo(() => {
+        const ccScores = {};
+
+        schools.forEach(s => {
+            const cc = String(s.visitor_name || '').trim();
+            if (cc) {
+                if (!ccScores[cc]) {
+                    ccScores[cc] = { ccName: cc, syncGain: 0, classGain: 0, installCount: 0, visitCount: 0, totalImpact: 0 };
+                }
+            }
+        });
+
+        visits.forEach(v => {
+            const cc = String(v.visitor_name || '').trim();
+            if (!cc || !ccScores[cc]) return;
+
+            const udise = String(v.udise_code || '').trim();
+            const vDate = parseDateLocal(v.visit_date);
+            if (!vDate || isNaN(vDate.getTime())) return;
+
+            ccScores[cc].visitCount++;
+
+            const preStart = new Date(vDate.getTime() - 11 * 86400000);
+            const preEnd = new Date(vDate.getTime() - 1 * 86400000);
+            const postStart = new Date(vDate.getTime() + 1 * 86400000);
+            const postEnd = new Date(vDate.getTime() + 11 * 86400000);
+
+            const inRange = (dStr, start, end) => {
+                const d = parseDateLocal(dStr);
+                return d && d >= start && d <= end;
+            };
+
+            const schoolEdustat = edustatByUdiseMap[udise] || [];
+            const preEdustat = schoolEdustat.filter(e => inRange(e.date, preStart, preEnd));
+            const postEdustat = schoolEdustat.filter(e => inRange(e.date, postStart, postEnd));
+            const preAvgHours = preEdustat.length > 0 ? preEdustat.reduce((sum, e) => sum + Number(e.hours || 0), 0) / 10 : 0;
+            const postAvgHours = postEdustat.length > 0 ? postEdustat.reduce((sum, e) => sum + Number(e.hours || 0), 0) / 10 : 0;
+            const deltaHours = postAvgHours - preAvgHours;
+
+            const schoolJhpms = jhpmsByUdiseMap[udise] || [];
+            const preJhpms = schoolJhpms.filter(j => inRange(j.date, preStart, preEnd));
+            const postJhpms = schoolJhpms.filter(j => inRange(j.date, postStart, postEnd));
+            const preClasses = preJhpms.length;
+            const postClasses = postJhpms.length;
+            const deltaClasses = (postClasses - preClasses) / 10;
+
+            ccScores[cc].syncGain += Math.max(0, deltaHours);
+            ccScores[cc].classGain += Math.max(0, deltaClasses);
+        });
+
+        return Object.values(ccScores).map(item => {
+            const visitWeight = Math.min(20, item.visitCount * 2.5);
+            const syncWeight = Math.min(40, (item.syncGain / (item.visitCount || 1)) * 15);
+            const classWeight = Math.min(40, (item.classGain / (item.visitCount || 1)) * 20);
+            const totalImpact = Math.round(visitWeight + syncWeight + classWeight);
+
+            return {
+                ...item,
+                totalImpact: Math.min(100, totalImpact)
+            };
+        }).sort((a, b) => b.totalImpact - a.totalImpact);
+    }, [schools, visits, edustatByUdiseMap, jhpmsByUdiseMap]);
+
+    // Compute live warning alerts for the selected coordinator's schools
+    const activeAlerts = useMemo(() => {
+        if (!selectedCC) return [];
+        
+        const ccSchools = schools.filter(s => String(s.visitor_name || '').trim().toLowerCase() === selectedCC.trim().toLowerCase());
+        const alertsList = [];
+
+        ccSchools.forEach(sch => {
+            const udise = String(sch.udise_code || '').trim();
+            
+            const schoolEdustat = edustatByUdiseMap[udise] || [];
+            const sortedEdustat = [...schoolEdustat].sort((a, b) => new Date(b.date) - new Date(a.date));
+            if (sortedEdustat.length > 0) {
+                const lastDate = parseDateLocal(sortedEdustat[0].date);
+                if (lastDate) {
+                    const daysOffline = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
+                    if (daysOffline >= 3) {
+                        alertsList.push({
+                            type: 'danger',
+                            title: 'Sync Drop Warning',
+                            message: `School ${sch.school_name} (UDISE: ${udise}) has stopped syncing data since ${formatDate(sortedEdustat[0].date)} (${daysOffline} days offline).`
+                        });
+                    }
+                }
+            } else {
+                alertsList.push({
+                    type: 'danger',
+                    title: 'No Data Synced',
+                    message: `School ${sch.school_name} (UDISE: ${udise}) has never synced any Edustat logs. Installation checklist required.`
+                });
+            }
+
+            const schoolJhpms = jhpmsByUdiseMap[udise] || [];
+            const last7DaysJhpms = schoolJhpms.filter(j => {
+                const jd = parseDateLocal(j.date);
+                return jd && (Date.now() - jd.getTime()) <= 7 * 86400000;
+            });
+            const avgClasses = last7DaysJhpms.length / 7;
+            if (avgClasses < 1.5 && schoolJhpms.length > 0) {
+                alertsList.push({
+                    type: 'warning',
+                    title: 'Low Activity Alert',
+                    message: `School ${sch.school_name} has a low daily class count average of ${avgClasses.toFixed(1)} classes/day over the last 7 days (Target is 3).`
+                });
+            }
+
+            const inventory = edustatMaster.filter(em => String(em.udise).trim() === udise);
+            const total = inventory.length;
+            const installed = inventory.filter(em => String(em.installed).toLowerCase().includes('yes') || String(em.status).toLowerCase().includes('install')).length;
+            if (total > installed) {
+                alertsList.push({
+                    type: 'warning',
+                    title: 'Pending Installation',
+                    message: `School ${sch.school_name} has ${total - installed} pending Edustat devices. Coordinator must install during next visit.`
+                });
+            }
+        });
+
+        return alertsList;
+    }, [selectedCC, schools, edustatByUdiseMap, jhpmsByUdiseMap, edustatMaster]);
 
     const suggestions = useMemo(() => {
         if (!searchTerm || searchTerm.length < 1) return [];
@@ -1971,6 +2196,16 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                         >
                             <ClockIcon className="w-3.5 h-3.5" /> Visit 360 & Timeline Audit
                         </button>
+                        <button
+                            onClick={() => setSelectedAnalysisTab('outcomes')}
+                            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+                                selectedAnalysisTab === 'outcomes'
+                                    ? 'bg-teal-600 text-white shadow-sm font-black'
+                                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-slate-200'
+                            }`}
+                        >
+                            <SparklesIcon className="w-3.5 h-3.5" /> Visit Outcomes & Impact
+                        </button>
                     </div>
 
                     {selectedAnalysisTab === 'performance' && (
@@ -2170,7 +2405,18 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                                             className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 ${visited ? 'border-l-green-500' : 'border-l-red-400'} bg-gray-50/40 dark:bg-slate-800/30`}>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-[11px] font-black text-gray-800 dark:text-gray-200 truncate">{s.school_name}</p>
-                                                <p className="text-[9px] text-gray-400 dark:text-slate-500 font-medium">{udise}</p>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[9px] text-gray-400 dark:text-slate-500 font-bold">{udise}</span>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedPreBriefUdise(udise);
+                                                        }}
+                                                        className="px-1.5 py-0.5 text-[8px] font-black uppercase bg-teal-50 hover:bg-teal-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-400 rounded border border-teal-200/50 dark:border-teal-800/50"
+                                                    >
+                                                        📋 Pre-Visit Brief
+                                                    </button>
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-2 ml-2">
                                                 {visited ? (
@@ -2922,8 +3168,379 @@ export default function CcDefAnalysis({ schools = [], visits = [], jhpmsLab = []
                             </div>
                         </div>
                     )}
+
+                    {selectedAnalysisTab === 'outcomes' && (
+                        <div className="space-y-6">
+                            {/* 1. Alerts Banner */}
+                            {activeAlerts.length > 0 && (
+                                <div className="space-y-2">
+                                    <h3 className="text-xs font-black uppercase tracking-wider text-red-800 dark:text-red-405 flex items-center gap-1.5">
+                                        <AlertIcon className="w-4 h-4 text-rose-500 animate-pulse" /> Urgent Alerts & Action Items ({activeAlerts.length})
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {activeAlerts.slice(0, 4).map((alert, idx) => (
+                                            <div key={idx} className={`p-3.5 rounded-xl border flex items-start gap-2.5 shadow-sm text-xs leading-relaxed font-bold ${
+                                                alert.type === 'danger' 
+                                                    ? 'bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border-red-200/50' 
+                                                    : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200/50'
+                                            }`}>
+                                                <span className="text-base">{alert.type === 'danger' ? '🔴' : '⚠️'}</span>
+                                                <div>
+                                                    <div className="font-extrabold uppercase tracking-wide text-[10px] mb-0.5">{alert.title}</div>
+                                                    <div>{alert.message}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 2. Leaderboard & Summary Stats */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Leaderboard Card */}
+                                <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-md">
+                                    <h3 className="text-xs font-black uppercase tracking-wider text-teal-800 dark:text-teal-400 mb-3 border-b border-gray-100 dark:border-slate-800 pb-2 flex items-center gap-1.5">
+                                        <TrophyIcon className="w-4 h-4" /> CC / DEF Performance Leaderboard
+                                    </h3>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-[11px] font-bold text-slate-700 dark:text-slate-350">
+                                            <thead>
+                                                <tr className="border-b border-slate-100 dark:border-slate-800 text-[10px] text-gray-500 uppercase tracking-wider text-left">
+                                                    <th className="py-2 px-1">Rank</th>
+                                                    <th className="py-2">CC Name</th>
+                                                    <th className="py-2 text-center">Visits</th>
+                                                    <th className="py-2 text-center">Sync Gain (Hrs)</th>
+                                                    <th className="py-2 text-center">Class Growth</th>
+                                                    <th className="py-2 text-right">Impact Score</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {leaderBoardData.slice(0, 10).map((cc, idx) => {
+                                                    const isCurrent = cc.ccName.trim().toLowerCase() === selectedCC.trim().toLowerCase();
+                                                    return (
+                                                        <tr key={idx} className={`border-b border-slate-100/50 dark:border-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${
+                                                            isCurrent ? 'bg-teal-50/40 dark:bg-teal-950/20 text-teal-700 dark:text-teal-400 font-extrabold' : ''
+                                                        }`}>
+                                                            <td className="py-2.5 px-1 font-black">
+                                                                {idx === 0 ? '🥇 1' : idx === 1 ? '🥈 2' : idx === 2 ? '🥉 3' : `#${idx + 1}`}
+                                                            </td>
+                                                            <td className="py-2.5">{cc.ccName}</td>
+                                                            <td className="py-2.5 text-center font-mono">{cc.visitCount}</td>
+                                                            <td className="py-2.5 text-center text-emerald-600 font-mono">+{cc.syncGain.toFixed(1)}h</td>
+                                                            <td className="py-2.5 text-center text-teal-600 font-mono">+{cc.classGain.toFixed(1)}/d</td>
+                                                            <td className="py-2.5 text-right font-black text-xs text-indigo-700 dark:text-indigo-405">{cc.totalImpact}/100</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Impact Metrics Card */}
+                                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-md flex flex-col justify-between">
+                                    <div>
+                                        <h3 className="text-xs font-black uppercase tracking-wider text-teal-800 dark:text-teal-400 mb-3 border-b border-gray-100 dark:border-slate-800 pb-2 flex items-center gap-1.5">
+                                            <TrendUpIcon className="w-4 h-4" /> CC Visit Impact Summary
+                                        </h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <div className="flex justify-between text-xs mb-1">
+                                                    <span className="font-extrabold text-slate-650 dark:text-slate-300">Sync Recovery Success</span>
+                                                    <span className="font-black text-emerald-600">
+                                                        {Math.round((visitOutcomes.filter(o => o.deltaSync > 0).length / (visitOutcomes.length || 1)) * 100)}%
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className="bg-emerald-500 h-full rounded-full" 
+                                                        style={{ width: `${Math.round((visitOutcomes.filter(o => o.deltaSync > 0).length / (visitOutcomes.length || 1)) * 100)}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div className="flex justify-between text-xs mb-1">
+                                                    <span className="font-extrabold text-slate-650 dark:text-slate-300">Class Count Boost</span>
+                                                    <span className="font-black text-teal-600">
+                                                        {Math.round((visitOutcomes.filter(o => o.deltaIct > 0 || o.deltaSmart > 0).length / (visitOutcomes.length || 1)) * 100)}%
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className="bg-teal-500 h-full rounded-full" 
+                                                        style={{ width: `${Math.round((visitOutcomes.filter(o => o.deltaIct > 0 || o.deltaSmart > 0).length / (visitOutcomes.length || 1)) * 100)}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-[10.5px] leading-relaxed text-gray-500 dark:text-slate-400 font-bold">
+                                        💡 <strong>Data Analyst Insight:</strong> Schools visited by {selectedCC} show a positive impact in computer activity and logs. Focus on schools showing "No Impact" to maximize visit quality.
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3. Pre-vs-Post Impact Table */}
+                            <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-5 shadow-md">
+                                <h3 className="text-xs font-black uppercase tracking-wider text-teal-800 dark:text-teal-400 mb-4 border-b border-gray-100 dark:border-slate-800 pb-2 flex items-center gap-1.5">
+                                    <BarChartIcon className="w-4 h-4" /> School-Wise Visit Impact Analysis (Pre-Visit vs. Post-Visit)
+                                </h3>
+                                {visitOutcomes.length === 0 ? (
+                                    <p className="text-xs text-gray-400 dark:text-slate-500 py-8 text-center italic border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/30">
+                                        No visit outcomes computed for this Coordinator in the selected period.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {visitOutcomes.map((item, idx) => {
+                                            const hasPending = item.totalDevices > item.installedDevices;
+                                            return (
+                                                <div key={idx} className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/30 dark:bg-slate-900/40 relative shadow-sm hover:shadow transition">
+                                                    {/* Row Header */}
+                                                    <div className="flex justify-between items-start gap-4 flex-wrap pb-3 border-b border-slate-100 dark:border-slate-800/65 mb-3">
+                                                        <div>
+                                                            <span className="text-[10px] font-extrabold uppercase tracking-wide bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded mr-2">
+                                                                {formatDate(item.visitDate)}
+                                                            </span>
+                                                            <strong className="text-xs text-slate-800 dark:text-slate-200">{item.schoolName}</strong>
+                                                            <span className="text-[10px] text-gray-400 font-bold ml-2 font-mono">UDISE: {item.udise}</span>
+                                                        </div>
+                                                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${item.color}`}>
+                                                            {item.impact === 'High Impact' ? '🟢 High Impact' : item.impact === 'Low Impact' ? '🟡 Low Impact' : '🔴 Action Required'}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Pre vs Post Comparison Grid */}
+                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                                        <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/60">
+                                                            <div className="text-[9px] text-gray-400 uppercase tracking-wide font-extrabold mb-1">Daily Active Hours</div>
+                                                            <div className="font-extrabold flex justify-between">
+                                                                <span className="text-gray-450 dark:text-slate-500 font-bold">Pre: {item.preAvgHours.toFixed(1)}h</span>
+                                                                <span className="text-slate-800 dark:text-slate-200">Post: {item.postAvgHours.toFixed(1)}h</span>
+                                                            </div>
+                                                            <div className={`text-[10px] font-black mt-1 font-mono ${item.deltaHours >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                {item.deltaHours >= 0 ? `+${item.deltaHours.toFixed(1)}h Growth` : `${item.deltaHours.toFixed(1)}h Slump`}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/60">
+                                                            <div className="text-[9px] text-gray-400 uppercase tracking-wide font-extrabold mb-1">Weekly Sync Days</div>
+                                                            <div className="font-extrabold flex justify-between">
+                                                                <span className="text-gray-450 dark:text-slate-500 font-bold">Pre: {item.preSyncDays}d</span>
+                                                                <span className="text-slate-800 dark:text-slate-200">Post: {item.postSyncDays}d</span>
+                                                            </div>
+                                                            <div className={`text-[10px] font-black mt-1 font-mono ${item.deltaSync >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                +{item.deltaSync} days recovery
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/65">
+                                                            <div className="text-[9px] text-gray-400 uppercase tracking-wide font-extrabold mb-1">Daily ICT Classes</div>
+                                                            <div className="font-extrabold flex justify-between">
+                                                                <span className="text-gray-450 dark:text-slate-500 font-bold">Pre: {item.preAvgIct.toFixed(1)}</span>
+                                                                <span className="text-slate-800 dark:text-slate-200">Post: {item.postAvgIct.toFixed(1)}</span>
+                                                            </div>
+                                                            <div className={`text-[10px] font-black mt-1 font-mono ${item.deltaIct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                +{item.deltaIct.toFixed(1)} classes/day
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/65">
+                                                            <div className="text-[9px] text-gray-400 uppercase tracking-wide font-extrabold mb-1">Daily Smart Classes</div>
+                                                            <div className="font-extrabold flex justify-between">
+                                                                <span className="text-gray-450 dark:text-slate-500 font-bold">Pre: {item.preAvgSmart.toFixed(1)}</span>
+                                                                <span className="text-slate-800 dark:text-slate-200">Post: {item.postAvgSmart.toFixed(1)}</span>
+                                                            </div>
+                                                            <div className={`text-[10px] font-black mt-1 font-mono ${item.deltaSmart >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                +{item.deltaSmart.toFixed(1)} classes/day
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Auto Action Plan Checklist */}
+                                                    <div className="mt-3 bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-150 dark:border-slate-800">
+                                                        <div className="text-[9.5px] font-extrabold text-slate-700 dark:text-slate-350 uppercase tracking-wider mb-2">📋 AI-Generated Action Checklist for next visit:</div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10.5px] font-semibold text-slate-650 dark:text-slate-400">
+                                                            {item.postAvgHours < 2 ? (
+                                                                <div className="flex items-center gap-1.5 text-rose-500">
+                                                                    ❌ <span>Troubleshoot daily sync (Current: {item.postAvgHours.toFixed(1)}h/day)</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1.5 text-emerald-600">
+                                                                    ✓ <span>Sync status healthy ({item.postAvgHours.toFixed(1)}h/day)</span>
+                                                                </div>
+                                                            )}
+
+                                                            {hasPending ? (
+                                                                <div className="flex items-center gap-1.5 text-amber-600">
+                                                                    ⚠️ <span>Install {item.totalDevices - item.installedDevices} pending Edustat master devices</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1.5 text-emerald-600">
+                                                                    ✓ <span>All registered hardware installed ({item.installedDevices} PCs)</span>
+                                                                </div>
+                                                            )}
+
+                                                            {item.postAvgIct < 2.5 ? (
+                                                                <div className="flex items-center gap-1.5 text-rose-500">
+                                                                    ❌ <span>Push ICT Instructor daily class count (Target: 3/day)</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1.5 text-emerald-600">
+                                                                    ✓ <span>Daily ICT classes on track ({item.postAvgIct.toFixed(1)}/day)</span>
+                                                                </div>
+                                                            )}
+
+                                                            {item.postAvgSmart < 1.5 ? (
+                                                                <div className="flex items-center gap-1.5 text-amber-600">
+                                                                    ⚠️ <span>Motivate subject teachers to utilize Smart TV ({item.postAvgSmart.toFixed(1)}/day)</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1.5 text-emerald-600">
+                                                                    ✓ <span>Smart class utilization healthy ({item.postAvgSmart.toFixed(1)}/day)</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
+
+            {/* Pre-Visit Briefing & Checklist Modal */}
+            {selectedPreBriefUdise && (() => {
+                const school = schoolsMap[selectedPreBriefUdise];
+                if (!school) return null;
+
+                const schoolEdustat = edustatByUdiseMap[selectedPreBriefUdise] || [];
+                const sortedEdustat = [...schoolEdustat].sort((a, b) => new Date(b.date) - new Date(a.date));
+                const lastSyncDate = sortedEdustat.length > 0 ? formatDate(sortedEdustat[0].date) : 'Never Synced';
+
+                const inventory = edustatMaster.filter(em => String(em.udise).trim() === selectedPreBriefUdise);
+                const total = inventory.length;
+                const installed = inventory.filter(em => String(em.installed).toLowerCase().includes('yes') || String(em.status).toLowerCase().includes('install')).length;
+
+                const schoolJhpms = jhpmsByUdiseMap[selectedPreBriefUdise] || [];
+                const last7DaysJhpms = schoolJhpms.filter(j => {
+                    const jd = parseDateLocal(j.date);
+                    return jd && (Date.now() - jd.getTime()) <= 7 * 86400000;
+                });
+                const avgClasses = last7DaysJhpms.length / 7;
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full overflow-hidden transform transition-all scale-100">
+                            <div className="bg-gradient-to-r from-teal-850 to-teal-650 dark:from-teal-900 dark:to-teal-700 p-5 text-white flex justify-between items-center">
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-widest font-black opacity-70">📋 Digital Visit Briefing</div>
+                                    <h3 className="text-sm font-black leading-tight mt-0.5">{school.school_name}</h3>
+                                    <div className="text-[10px] font-mono opacity-80 font-bold">UDISE: {selectedPreBriefUdise}</div>
+                                </div>
+                                <button 
+                                    onClick={() => setSelectedPreBriefUdise(null)}
+                                    className="text-white hover:text-gray-200 font-extrabold text-sm bg-black/15 hover:bg-black/25 w-7 h-7 rounded-full flex items-center justify-center transition"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+                                <div className="grid grid-cols-3 gap-2.5 text-center">
+                                    <div className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
+                                        <div className="text-[18px]">🖥️</div>
+                                        <div className="text-[11px] font-black text-slate-800 dark:text-slate-200 mt-1">
+                                            {installed}/{total} Installed
+                                        </div>
+                                        <div className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mt-0.5">Hardware</div>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
+                                        <div className="text-[18px]">🔄</div>
+                                        <div className="text-[10px] font-black text-slate-800 dark:text-slate-200 mt-1 truncate" title={lastSyncDate}>
+                                            {lastSyncDate}
+                                        </div>
+                                        <div className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mt-0.5">Last Sync</div>
+                                    </div>
+                                    <div className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
+                                        <div className="text-[18px]">🏫</div>
+                                        <div className="text-[11px] font-black text-slate-800 dark:text-slate-200 mt-1">
+                                            {avgClasses.toFixed(1)}/day
+                                        </div>
+                                        <div className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase mt-0.5">Class Avg</div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <h4 className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                                        Field Action Checklist (स्कूल विज़िट के कार्य)
+                                    </h4>
+                                    <div className="space-y-2.5 text-xs font-semibold text-slate-700 dark:text-slate-350">
+                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                            <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" />
+                                            <div>
+                                                <strong>डिवाइस सिंकिंग जांचें:</strong> {sortedEdustat.length === 0 ? 'स्कूल ने कभी सिंक नहीं किया है।' : `आखिरी सिंक ${lastSyncDate} को था।`} ऑफलाइन पड़े कंप्यूटर के इंटरनेट और पावर केबल की जांच करें।
+                                            </div>
+                                        </label>
+
+                                        {total > installed && (
+                                            <label className="flex items-start gap-2.5 cursor-pointer select-none text-amber-700 dark:text-amber-400 bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
+                                                <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
+                                                <div>
+                                                    <strong>पेंडिंग कंप्यूटर इंस्टॉल कराएं:</strong> इस स्कूल में {total - installed} कंप्यूटर पेंडिंग हैं। सुनिश्चित करें कि वे चालू हों और सिंक कर रहे हों।
+                                                </div>
+                                            </label>
+                                        )}
+
+                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                            <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" />
+                                            <div>
+                                                <strong>ICT क्लासेस बढ़ाएं:</strong> वर्तमान औसत {avgClasses.toFixed(1)}/दिन है। प्रतिदिन कम से कम 3 क्लासेस लेने के लिए इंस्ट्रक्टर से टाइम टेबल सेट करवाएं।
+                                            </div>
+                                        </label>
+
+                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                            <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" />
+                                            <div>
+                                                <strong>स्मार्ट क्लास की उपयोगिता:</strong> स्मार्ट टीवी/प्रोजेक्टर के चालू होने की जांच करें। सब्जेक्ट टीचरों को इस पर क्लासेस लेने के लिए प्रेरित करें।
+                                            </div>
+                                        </label>
+
+                                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                            <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500" />
+                                            <div>
+                                                <strong>इंस्ट्रक्टर उपस्थिति:</strong> रजिस्टर और कंप्यूटर लॉग से इंस्ट्रक्टर की दैनिक उपस्थिति और कार्य प्रदर्शन सत्यापित करें।
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50 dark:bg-slate-950/60 p-4 border-t border-slate-150 dark:border-slate-800 flex justify-end gap-2.5">
+                                <button 
+                                    onClick={() => setSelectedPreBriefUdise(null)}
+                                    className="px-4 py-2 text-xs font-extrabold uppercase rounded-xl border border-slate-200 dark:border-slate-800 text-slate-650 dark:text-slate-400 bg-white dark:bg-slate-900 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const text = `School: ${school.school_name}\nUDISE: ${selectedPreBriefUdise}\nLast Sync: ${lastSyncDate}\nHardware Status: ${installed}/${total} Installed\nClass Avg: ${avgClasses.toFixed(1)}/day\n\nVisit Targets:\n1. Troubleshoot Offline Devices\n2. Clear ${total - installed} Pending Installations\n3. Push daily class counts to target of 3/day`;
+                                        navigator.clipboard.writeText(text);
+                                        alert('Pre-Visit Agenda copied to clipboard!');
+                                    }}
+                                    className="px-4 py-2 text-xs font-black uppercase rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow transition"
+                                >
+                                    📋 Copy Agenda
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }
