@@ -127,12 +127,39 @@ const SchoolWiseSearch = ({
     selDistricts = [],
     selBlocks = [],
     selCCs = [],
-    ccNameMapping = {}
+    ccNameMapping = {},
+    visitsChecklist = { logs: [] },
+    onSaveChecklist
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [selectedSchool, setSelectedSchool] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
+
+    const [visitorName, setVisitorName] = useState('');
+    const [remarks, setRemarks] = useState('');
+    const [completedItems, setCompletedItems] = useState({});
+    const [saveStatus, setSaveStatus] = useState(null);
+
+    useEffect(() => {
+        if (selectedSchool) {
+            const udise = String(selectedSchool.udise_code || '').trim();
+            const todayStr = new Date().toISOString().split('T')[0];
+            const logs = (visitsChecklist && Array.isArray(visitsChecklist.logs)) ? visitsChecklist.logs : [];
+            const existingLog = logs.find(log => log.udise === udise && log.visitDate === todayStr);
+
+            if (existingLog) {
+                setVisitorName(existingLog.visitorName || '');
+                setRemarks(existingLog.remarks || '');
+                setCompletedItems(existingLog.completedItems || {});
+            } else {
+                setVisitorName('');
+                setRemarks('');
+                setCompletedItems({});
+            }
+            setSaveStatus(null);
+        }
+    }, [selectedSchool, visitsChecklist]);
 
     // Filtered schools based on active filter bar selections
     const filteredSchoolsList = useMemo(() => {
@@ -1287,6 +1314,422 @@ const SchoolWiseSearch = ({
                                     ))}
                                 </div>
                             )}
+                        </div>
+
+                        {/* Interactive Dynamic Checklist Section */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 rounded-2xl p-5 shadow-sm space-y-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-teal-800 dark:text-teal-400 flex items-center gap-1.5 border-b border-gray-100 dark:border-slate-800 pb-2">
+                                📋 Live School Visit Checklist & Audit Tool
+                            </h3>
+
+                            {/* Active visitor identity input fields */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                <div>
+                                    <label className="block text-gray-500 font-extrabold uppercase mb-1">Visitor Name</label>
+                                    <input 
+                                        type="text"
+                                        placeholder="Enter your name"
+                                        value={visitorName}
+                                        onChange={(e) => setVisitorName(e.target.value)}
+                                        className="w-full px-3 py-2 border rounded-xl dark:bg-slate-950 dark:border-slate-850 text-slate-800 dark:text-slate-200"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-gray-500 font-extrabold uppercase mb-1">Visit Date</label>
+                                    <input 
+                                        type="text"
+                                        readOnly
+                                        value={new Date().toISOString().split('T')[0]}
+                                        className="w-full px-3 py-2 border rounded-xl bg-gray-50 dark:bg-slate-950 dark:border-slate-850 text-slate-500 read-only:opacity-70"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Dynamically derived checklist checks based on active pain areas */}
+                            <div className="space-y-3 mt-4 text-xs font-semibold text-slate-700 dark:text-slate-350">
+                                <p className="text-[10px] font-black uppercase text-teal-650 tracking-wider">Required Audit Tasks (English):</p>
+
+                                {/* Task 1: Hardware Installations */}
+                                {schoolProfile && (
+                                    (() => {
+                                        const inventoryLength = edustatMaster.filter(d => String(d.udise).trim() === String(selectedSchool.udise_code).trim()).length;
+                                        const installedCount = edustatMaster.filter(d => String(d.udise).trim() === String(selectedSchool.udise_code).trim() && (String(d.installed).toLowerCase().includes('yes') || String(d.status).toLowerCase().includes('install'))).length;
+                                        const pendingInstall = inventoryLength - installedCount;
+                                        
+                                        if (pendingInstall > 0) {
+                                            return (
+                                                <label className="flex items-start gap-2.5 cursor-pointer select-none p-2.5 rounded-lg border border-amber-500/10 bg-amber-500/5 text-amber-700 dark:text-amber-400">
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={!!completedItems.installChecked}
+                                                        onChange={(e) => setCompletedItems(prev => ({ ...prev, installChecked: e.target.checked }))}
+                                                        className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                                    />
+                                                    <div>
+                                                        <strong>Pending Edustat Installation:</strong> Verify store & setup the {pendingInstall} pending CPU(s).
+                                                    </div>
+                                                </label>
+                                            );
+                                        }
+                                        return null;
+                                    })()
+                                )}
+
+                                {/* Task 2: Sync troubleshooting */}
+                                {schoolProfile && (() => {
+                                    const schoolDevices = edustatMaster.filter(d => String(d.udise).trim() === String(selectedSchool.udise_code).trim());
+                                    // Identify device hours from active data
+                                    const deviceHoursMap = {};
+                                    const schoolEdustatLogs = filteredEdustatRange.filter(e => String(e.udise).trim() === String(selectedSchool.udise_code).trim());
+                                    schoolEdustatLogs.forEach(e => {
+                                        const hours = e.hours !== undefined ? Number(e.hours) : parseFloat(getVal(e, 'hours') || 0);
+                                        const serial = String(e.serial || '').trim();
+                                        if (serial) deviceHoursMap[serial] = (deviceHoursMap[serial] || 0) + hours;
+                                    });
+
+                                    const unsyncedDevices = schoolDevices.filter(d => {
+                                        const serial = String(d.serial || '').trim();
+                                        const hours = deviceHoursMap[serial] || 0;
+                                        return hours === 0;
+                                    });
+
+                                    if (unsyncedDevices.length > 0) {
+                                        return (
+                                            <label className="flex items-start gap-2.5 cursor-pointer select-none p-2.5 rounded-lg border border-rose-500/10 bg-rose-500/5 text-rose-700 dark:text-rose-400">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={!!completedItems.syncChecked}
+                                                    onChange={(e) => setCompletedItems(prev => ({ ...prev, syncChecked: e.target.checked }))}
+                                                    className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                                />
+                                                <div className="space-y-1">
+                                                    <div>
+                                                        <strong>Pending Sync Check:</strong> Troubleshoot connectivity & cables for the {unsyncedDevices.length} offline CPU(s):
+                                                    </div>
+                                                    <ul className="list-disc pl-5 font-mono text-[10px] space-y-0.5">
+                                                        {unsyncedDevices.map((d, idx) => (
+                                                            <li key={idx}>CPU Serial: {d.serial || 'Unknown'}</li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            </label>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                {/* Task 3: ICT class drops */}
+                                {schoolProfile && (() => {
+                                    const validWdays = Number(workingDays) > 0 ? Number(workingDays) : 1;
+                                    const avgClasses = schoolProfile.totalJhpmsClasses / validWdays;
+
+                                    if (avgClasses < 3.0) {
+                                        return (
+                                            <label className="flex items-start gap-2.5 cursor-pointer select-none p-2 rounded-lg border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={!!completedItems.ictDropChecked}
+                                                    onChange={(e) => setCompletedItems(prev => ({ ...prev, ictDropChecked: e.target.checked }))}
+                                                    className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                                />
+                                                <div>
+                                                    <strong>Avg ICT Class Drop:</strong> Review timetables to target at least 3.0 ICT classes daily (Current average: {avgClasses.toFixed(1)}/day).
+                                                </div>
+                                            </label>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                {/* Task 4: Smart class drops */}
+                                {schoolProfile && (() => {
+                                    const validWdays = Number(workingDays) > 0 ? Number(workingDays) : 1;
+                                    const avgSmart = schoolProfile.smartCount / validWdays;
+
+                                    if (avgSmart < 2.0) {
+                                        return (
+                                            <label className="flex items-start gap-2.5 cursor-pointer select-none p-2 rounded-lg border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={!!completedItems.smartDropChecked}
+                                                    onChange={(e) => setCompletedItems(prev => ({ ...prev, smartDropChecked: e.target.checked }))}
+                                                    className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                                />
+                                                <div>
+                                                    <strong>Avg Smart Class Drop:</strong> Verify Smart TV/Projector setup is functional (Current average: {avgSmart.toFixed(1)}/day).
+                                                </div>
+                                            </label>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                {/* Task 5: Drop from regional averages */}
+                                {schoolProfile && (() => {
+                                    const validWdays = Number(workingDays) > 0 ? Number(workingDays) : 1;
+                                    const schoolAvgCls = schoolProfile.totalJhpmsClasses / validWdays;
+                                    const distAvgCls = schoolProfile.distProjectAvgs.avgClasses;
+
+                                    if (schoolAvgCls < distAvgCls) {
+                                        return (
+                                            <label className="flex items-start gap-2.5 cursor-pointer select-none p-2 rounded-lg border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={!!completedItems.distDropChecked}
+                                                    onChange={(e) => setCompletedItems(prev => ({ ...prev, distDropChecked: e.target.checked }))}
+                                                    className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                                />
+                                                <div>
+                                                    <strong>Drop from District Avg Class:</strong> Align classroom attendance with regional benchmark (School avg: {schoolAvgCls.toFixed(1)}/day vs District avg: {distAvgCls.toFixed(1)}/day).
+                                                </div>
+                                            </label>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                {/* Task 6: Drop of school avg daily Edustat usage */}
+                                {schoolProfile && (() => {
+                                    const validWdays = Number(workingDays) > 0 ? Number(workingDays) : 1;
+                                    const schoolAvgHours = schoolProfile.totalEduHours / validWdays;
+                                    const distAvgHours = schoolProfile.distProjectAvgs.avgHours;
+
+                                    if (schoolAvgHours < distAvgHours) {
+                                        return (
+                                            <label className="flex items-start gap-2.5 cursor-pointer select-none p-2 rounded-lg border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={!!completedItems.edustatUsageDropChecked}
+                                                    onChange={(e) => setCompletedItems(prev => ({ ...prev, edustatUsageDropChecked: e.target.checked }))}
+                                                    className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                                />
+                                                <div>
+                                                    <strong>Drop of District Avg Daily Usage:</strong> Restructure lab daily usage hours (School usage: {schoolAvgHours.toFixed(1)} hrs/day vs District avg: {distAvgHours.toFixed(1)} hrs/day).
+                                                </div>
+                                            </label>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                {/* Task 7: Instructor Rank */}
+                                {schoolProfile && (
+                                    <label className="flex items-start gap-2.5 cursor-pointer select-none p-2 rounded-lg border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40">
+                                        <input 
+                                            type="checkbox"
+                                            checked={!!completedItems.rankChecked}
+                                            onChange={(e) => setCompletedItems(prev => ({ ...prev, rankChecked: e.target.checked }))}
+                                            className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                        />
+                                        <div>
+                                            <strong>Instructor Performance Status:</strong> Discuss current rankings & improvement goals (Current District Rank: #{schoolProfile.districtRank} of {schoolProfile.totalDistrictRanked}).
+                                        </div>
+                                    </label>
+                                )}
+
+                                {/* Task 8: Theory vs Practical Ratio */}
+                                {schoolProfile && (() => {
+                                    const totalIct = schoolProfile.ictCount || 0;
+                                    const practicalCount = schoolProfile.practicalCount || 0;
+                                    const theoryCount = schoolProfile.theoryCount || 0;
+                                    const practicalPct = totalIct > 0 ? Math.round((practicalCount / totalIct) * 100) : 0;
+                                    const theoryPct = totalIct > 0 ? Math.round((theoryCount / totalIct) * 100) : 0;
+
+                                    return (
+                                        <label className="flex items-start gap-2.5 cursor-pointer select-none p-2 rounded-lg border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40">
+                                            <input 
+                                                type="checkbox"
+                                                checked={!!completedItems.theoryRatioChecked}
+                                                onChange={(e) => setCompletedItems(prev => ({ ...prev, theoryRatioChecked: e.target.checked }))}
+                                                className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                            />
+                                            <div>
+                                                <strong>Lab Practical Ratio Check:</strong> Theory: {theoryPct}% ({theoryCount} classes) | Practical: {practicalPct}% ({practicalCount} classes). Push for hands-on system practice (Target: &gt;60% practical sessions).
+                                            </div>
+                                        </label>
+                                    );
+                                })()}
+
+                                {/* Task 9: Attendance registry verification */}
+                                <label className="flex items-start gap-2.5 cursor-pointer select-none p-2 rounded-lg border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40">
+                                    <input 
+                                        type="checkbox"
+                                        checked={!!completedItems.attendanceChecked}
+                                        onChange={(e) => setCompletedItems(prev => ({ ...prev, attendanceChecked: e.target.checked }))}
+                                        className="mt-0.5 rounded border-gray-300 text-teal-650 focus:ring-teal-500"
+                                    />
+                                    <div>
+                                        <strong>Instructor Attendance & Daily Logs:</strong> Audit physical attendance registers & cross-verify online JHPMS logging daily.
+                                    </div>
+                                </label>
+                            </div>
+
+                            {/* Visitor remarks input area */}
+                            <div className="space-y-1 mt-3">
+                                <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider">Visitor Remarks & Actions Taken</label>
+                                <textarea 
+                                    rows={2}
+                                    placeholder="Enter physical observations or corrective actions done..."
+                                    value={remarks}
+                                    onChange={(e) => setRemarks(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs border rounded-xl dark:bg-slate-950 dark:border-slate-850 text-slate-800 dark:text-slate-200"
+                                />
+                            </div>
+
+                            {/* Submit & Copy Actions */}
+                            <div className="flex gap-2.5 pt-2">
+                                <button 
+                                    onClick={async () => {
+                                        if (!visitorName.trim()) {
+                                            alert("Please enter visitor name before saving!");
+                                            return;
+                                        }
+                                        setSaveStatus('Saving...');
+                                        const newEntry = {
+                                            udise: String(selectedSchool.udise_code || '').trim(),
+                                            visitDate: new Date().toISOString().split('T')[0],
+                                            visitorName: visitorName.trim(),
+                                            completedItems,
+                                            remarks: remarks.trim(),
+                                            timestamp: new Date().toISOString()
+                                        };
+                                        if (onSaveChecklist) {
+                                            await onSaveChecklist(String(selectedSchool.udise_code || '').trim(), newEntry);
+                                            setSaveStatus('Checklist Saved Successfully! ✓');
+                                            setTimeout(() => setSaveStatus(null), 3000);
+                                        }
+                                    }}
+                                    className="px-4 py-2 text-xs font-black uppercase rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow transition flex-1 text-center"
+                                >
+                                    {saveStatus || 'Save Visit Audit Logs'}
+                                </button>
+                                
+                                <button 
+                                    onClick={() => {
+                                        const todayStr = new Date().toISOString().split('T')[0];
+                                        const instructorName = schoolProfile?.activeInstructor?.instructorName || schoolProfile?.activeInstructor?.name || selectedSchool.visitor_name || 'N/A';
+                                        
+                                        // Offline CPUs calculation
+                                        const schoolDevices = edustatMaster.filter(d => String(d.udise).trim() === String(selectedSchool.udise_code).trim());
+                                        const deviceHoursMap = {};
+                                        const schoolEdustatLogs = filteredEdustatRange.filter(e => String(e.udise).trim() === String(selectedSchool.udise_code).trim());
+                                        schoolEdustatLogs.forEach(e => {
+                                            const hours = e.hours !== undefined ? Number(e.hours) : parseFloat(getVal(e, 'hours') || 0);
+                                            const serial = String(e.serial || '').trim();
+                                            if (serial) deviceHoursMap[serial] = (deviceHoursMap[serial] || 0) + hours;
+                                        });
+                                        const unsyncedDevices = schoolDevices.filter(d => (deviceHoursMap[d.serial] || 0) === 0);
+                                        
+                                        const offlineSerials = unsyncedDevices.map(d => `   • CPU Serial: ${d.serial || 'N/A'}`).join('\n');
+                                        
+                                        const validWdays = Number(workingDays) > 0 ? Number(workingDays) : 1;
+                                        const avgClasses = schoolProfile ? (schoolProfile.totalJhpmsClasses / validWdays) : 0;
+                                        const avgSmart = schoolProfile ? (schoolProfile.smartCount / validWdays) : 0;
+                                        const schoolAvgHours = schoolProfile ? (schoolProfile.totalEduHours / validWdays) : 0;
+
+                                        const totalIct = schoolProfile?.ictCount || 0;
+                                        const practicalCount = schoolProfile?.practicalCount || 0;
+                                        const theoryCount = schoolProfile?.theoryCount || 0;
+                                        const practicalPct = totalIct > 0 ? Math.round((practicalCount / totalIct) * 100) : 0;
+                                        const theoryPct = totalIct > 0 ? Math.round((theoryCount / totalIct) * 100) : 0;
+
+                                        const text = `*SCHOOL AUDIT & VISIT AGENDA* 🏫
+-----------------------------------
+*School Name:* ${selectedSchool.school_name}
+*UDISE:* ${selectedSchool.udise_code}
+*Date of Visit:* ${todayStr}
+*Instructor Name:* ${instructorName}
+*District Instructor Rank:* #${schoolProfile?.districtRank} out of ${schoolProfile?.totalDistrictRanked}
+
+*DATABASE STATUS & DETECTED PAIN AREAS:*
+
+1. 🖥️ *Device Sync Drop:*
+   ${schoolDevices.length - unsyncedDevices.length}/${schoolDevices.length} devices active. Offline Serial Numbers:
+${offlineSerials || '   • None'}
+
+2. ⚙️ *Pending Installation:*
+   ${schoolDevices.length - schoolDevices.filter(d => String(d.installed).toLowerCase().includes('yes') || String(d.status).toLowerCase().includes('install')).length} devices pending installation in store.
+
+3. 🏫 *ICT Classes (Target: 3.0/day):*
+   Current average: ${avgClasses.toFixed(1)}/day (District average: ${schoolProfile?.distProjectAvgs.avgClasses.toFixed(1)}/day)
+   ${avgClasses < 3.0 ? '⚠️ Drop from Target detected!' : '✓ Class targets satisfied.'}
+
+4. 📊 *Smart Classes (Target: 2.0/day):*
+   Current average: ${avgSmart.toFixed(1)}/day.
+
+5. 📈 *Usage Hours:*
+   School hours: ${schoolAvgHours.toFixed(1)} hrs/day (District average: ${schoolProfile?.distProjectAvgs.avgHours.toFixed(1)} hrs/day)
+
+6. 📝 *Theory/Practical Ratio:*
+   Theory: ${theoryPct}% (${theoryCount} Classes) | Practical: ${practicalPct}% (${practicalCount} Classes)
+
+-----------------------------------
+*VISITOR ACTION CHECKLIST:*
+${completedItems.syncChecked ? '[x]' : '[ ]'} Check internet & cable connections for offline CPUs.
+${completedItems.installChecked ? '[x]' : '[ ]'} Setup the pending uninstalled CPUs.
+${completedItems.ictDropChecked ? '[x]' : '[ ]'} Re-align classroom timetable for 3 ICT classes daily.
+${completedItems.smartDropChecked ? '[x]' : '[ ]'} Guide teachers for Smart Class TV usage.
+${completedItems.attendanceChecked ? '[x]' : '[ ]'} Audit lab registers & verify student practice logs.
+
+*Visitor Name:* ${visitorName || 'N/A'}
+*Remarks:* ${remarks || 'None'}`;
+                                        
+                                        navigator.clipboard.writeText(text);
+                                        alert('Visit Agenda & Checklist copied to clipboard for WhatsApp sharing!');
+                                    }}
+                                    className="px-4 py-2 text-xs font-black uppercase rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-850 shadow border border-teal-100 transition flex-1 text-center"
+                                >
+                                    📋 Copy WhatsApp Agenda
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Completed Visit Audits Log History Section */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 rounded-2xl p-5 shadow-sm space-y-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-teal-800 dark:text-teal-400 flex items-center gap-1.5 border-b border-gray-100 dark:border-slate-800 pb-2">
+                                ⏱ Completed Visit Audits Log History
+                            </h3>
+                            {(() => {
+                                const udise = String(selectedSchool.udise_code || '').trim();
+                                const logs = (visitsChecklist && Array.isArray(visitsChecklist.logs)) ? visitsChecklist.logs : [];
+                                const schoolLogs = logs.filter(log => log.udise === udise).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                                if (schoolLogs.length === 0) {
+                                    return (
+                                        <div className="text-xs text-gray-400 italic text-center py-6">
+                                            No completed audits logged for this school yet.
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="space-y-4">
+                                        {schoolLogs.map((log, idx) => (
+                                            <div key={idx} className="p-3 border rounded-xl bg-slate-50/50 dark:bg-slate-950/20 text-xs space-y-2">
+                                                <div className="flex justify-between items-center font-extrabold text-slate-800 dark:text-slate-200">
+                                                    <span>👤 {log.visitorName}</span>
+                                                    <span className="text-[10px] text-gray-500 font-bold">{formatDate(log.visitDate)}</span>
+                                                </div>
+                                                {log.remarks && (
+                                                    <p className="text-slate-600 dark:text-slate-400 font-medium italic">"{log.remarks}"</p>
+                                                )}
+                                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                                    {Object.keys(log.completedItems || {}).map((key, i) => {
+                                                        if (log.completedItems[key]) {
+                                                            return (
+                                                                <span key={i} className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold text-[9px] uppercase">
+                                                                    ✓ {key.replace('Checked', '').replace('Drop', '')}
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                     </div>

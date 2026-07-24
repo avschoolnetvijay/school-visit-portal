@@ -263,7 +263,7 @@ const App = () => {
     const [edustatMaster, setEdustatMaster] = useState([]);
     const [manpower, setManpower] = useState([]);
     const [visit360, setVisit360] = useState([]);
-    const [visitsChecklist, setVisitsChecklist] = useState({});
+    const [visitsChecklist, setVisitsChecklist] = useState({ logs: [] });
     
     // Temporary Session states (Hybrid Sandbox)
     const [tempVisits, setTempVisits] = useState([]);
@@ -331,12 +331,13 @@ const App = () => {
         setActiveTab('school-search');
     }, []);
 
-    const handleSaveChecklist = useCallback(async (udise, schoolChecklistState) => {
+    const handleSaveChecklist = useCallback(async (udise, newLogEntry) => {
         try {
             setVisitsChecklist(prev => {
+                const prevLogs = (prev && Array.isArray(prev.logs)) ? prev.logs : [];
+                const filteredLogs = prevLogs.filter(log => !(log.udise === udise && log.visitDate === newLogEntry.visitDate));
                 const updated = {
-                    ...prev,
-                    [udise]: schoolChecklistState
+                    logs: [...filteredLogs, newLogEntry]
                 };
                 set('visits_checklist', updated).catch(e => {
                     console.error("Async set error in background:", e);
@@ -1127,8 +1128,28 @@ const App = () => {
                 if (filteredManpower.length > 0) setManpower(filteredManpower);
                 if (filteredVisit360 && filteredVisit360.length > 0) setVisit360(filteredVisit360);
                 if (v360Meta) setVisit360Meta(v360Meta);
-                if (vChecklist) setVisitsChecklist(vChecklist);
-                else setVisitsChecklist({});
+                if (vChecklist) {
+                    if (vChecklist.logs && Array.isArray(vChecklist.logs)) {
+                        setVisitsChecklist(vChecklist);
+                    } else {
+                        const migratedLogs = [];
+                        Object.keys(vChecklist).forEach(udise => {
+                            if (udise !== 'logs' && vChecklist[udise]) {
+                                migratedLogs.push({
+                                    udise,
+                                    visitDate: new Date().toISOString().split('T')[0],
+                                    visitorName: 'System Migration',
+                                    completedItems: vChecklist[udise],
+                                    remarks: 'Migrated from previous checklist data',
+                                    timestamp: new Date().toISOString()
+                                });
+                            }
+                        });
+                        setVisitsChecklist({ logs: migratedLogs });
+                    }
+                } else {
+                    setVisitsChecklist({ logs: [] });
+                }
                 
                 // Save user specific overlay states
                 setUserVisits(filteredUserVisits);
@@ -2298,7 +2319,7 @@ const App = () => {
         if (activeTab === 'zone-performance') return <ZonePerformance schools={schools} visits={combinedVisits} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} workingDays={workingDays} ccNameMapping={ccNameMapping} onRegisterExport={setCustomExportHandler} userPermissions={userPermissions} />;
         if (activeTab === 'district-performance') return <DistrictPerformance schools={schools} visits={combinedVisits} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} workingDays={workingDays} ccNameMapping={ccNameMapping} onRegisterExport={setCustomExportHandler} userPermissions={userPermissions} />;
         if (activeTab === 'school-performance') return <SchoolPerformance schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} onRegisterExport={setCustomExportHandler} userPermissions={userPermissions} />;
-        if (activeTab === 'school-search') return <SchoolWiseSearch schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} visits={combinedVisits} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} darkMode={darkMode} onDrillDown={handleDrillDown} initialUdise={drillToUdise} />;
+        if (activeTab === 'school-search') return <SchoolWiseSearch schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} visits={combinedVisits} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} darkMode={darkMode} onDrillDown={handleDrillDown} initialUdise={drillToUdise} visitsChecklist={visitsChecklist} onSaveChecklist={handleSaveChecklist} />;
         if (activeTab === 'cc-analysis') return <CcDefAnalysis schools={schools} visits={combinedVisits} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} startDate={startDate} endDate={endDate} ccNameMapping={ccNameMapping} darkMode={darkMode} onNavigateToSchool={handleNavigateToSchool} manpower={manpower} edustatMaster={edustatMaster} onDrillDown={handleDrillDown} visit360={visit360} visitsChecklist={visitsChecklist} onSaveChecklist={handleSaveChecklist} />;
         if (activeTab === 'plan') return <PlanView data={processedData} allVisits={combinedVisits} manpower={manpower} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} schools={schools} startDate={startDate} endDate={endDate} />;
         if (activeTab === 'compliance') return <ComplianceView data={processedData} />;
