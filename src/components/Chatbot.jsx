@@ -48,6 +48,7 @@ const SYNONYMS = {
   best: ['best', 'top', 'good', 'achha', 'leader', 'ranking', 'highest', 'no1', 'no 1', 'super', 'first', 'behter', 'behtar', 'badiya', 'badhiya'],
   poor: ['poor', 'worst', 'kharab', 'low', 'weak', 'kamjor', 'kamzore', 'lazzy', 'lazy', 'inactive', 'slow', 'improvement', 'niche', 'bad', 'down', 'bekar'],
   smart: ['smart', 'tv', 'projector', 'smarttv', 'television', 'digital'],
+  edustat: ['edustat', 'hours', 'runtime', 'sync', 'computer', 'run', 'time', 'usages', 'usage'],
   school: ['school', 'schools', 'shcool', 'scholl', 'ums', 'hs', 'ms', 'vidyalaya', 'schoo', 'schll'],
   cc: ['cc', 'def', 'coordinator', 'coordinators', 'instructor', 'instructors', 'visitor', 'visitors', 'manpower', 'personnel', 'staff', 'cc name', 'cc list'],
   urgent: ['urgent', 'priority', 'visiting', 'visit', 'immediate', 'emergency', 'jaldi', 'important', 'jaruri', 'zaroori']
@@ -100,12 +101,14 @@ const classifyQuery = (queryText) => {
     bestCC: 0,
     poorCC: 0,
     urgentVisit: 0,
-    bestSmartClass: 0
+    bestSmartClass: 0,
+    bestEduStat: 0
   };
 
   let hasBest = false;
   let hasPoor = false;
   let hasSmart = false;
+  let hasEduStat = false;
   let hasSchool = false;
   let hasCC = false;
   let hasUrgent = false;
@@ -116,6 +119,7 @@ const classifyQuery = (queryText) => {
       if (match.category === 'best') hasBest = true;
       if (match.category === 'poor') hasPoor = true;
       if (match.category === 'smart') hasSmart = true;
+      if (match.category === 'edustat') hasEduStat = true;
       if (match.category === 'school') hasSchool = true;
       if (match.category === 'cc') hasCC = true;
       if (match.category === 'urgent') hasUrgent = true;
@@ -124,6 +128,8 @@ const classifyQuery = (queryText) => {
 
   if (hasBest && hasSchool && hasSmart) {
     score.bestSmartClass = 5;
+  } else if (hasBest && hasSchool && hasEduStat) {
+    score.bestEduStat = 5;
   } else if (hasBest && hasSchool) {
     score.bestSchool = 4;
   } else if (hasPoor && hasSchool) {
@@ -399,12 +405,14 @@ function Chatbot({
       targetSchool = enrichedSchools.find(s => cleanUdise(s.udise) === udiseStr);
     } else {
       const nameTokens = tokens.filter(t => 
+        isNaN(parseInt(t, 10)) &&
         !SYNONYMS.best.some(kw => isFuzzyMatch(t, kw)) &&
         !SYNONYMS.poor.some(kw => isFuzzyMatch(t, kw)) &&
         !SYNONYMS.cc.some(kw => isFuzzyMatch(t, kw)) &&
         !SYNONYMS.school.some(kw => isFuzzyMatch(t, kw)) &&
         !SYNONYMS.urgent.some(kw => isFuzzyMatch(t, kw)) &&
-        !SYNONYMS.smart.some(kw => isFuzzyMatch(t, kw))
+        !SYNONYMS.smart.some(kw => isFuzzyMatch(t, kw)) &&
+        !SYNONYMS.edustat.some(kw => isFuzzyMatch(t, kw))
       );
 
       if (nameTokens.length > 0) {
@@ -460,12 +468,14 @@ function Chatbot({
 
     // 2. SPECIFIC COORDINATOR (CC/DEF) LOOKUP
     const ccTokens = tokens.filter(t => 
+      isNaN(parseInt(t, 10)) &&
       !SYNONYMS.best.some(kw => isFuzzyMatch(t, kw)) &&
       !SYNONYMS.poor.some(kw => isFuzzyMatch(t, kw)) &&
       !SYNONYMS.cc.some(kw => isFuzzyMatch(t, kw)) &&
       !SYNONYMS.school.some(kw => isFuzzyMatch(t, kw)) &&
       !SYNONYMS.urgent.some(kw => isFuzzyMatch(t, kw)) &&
-      !SYNONYMS.smart.some(kw => isFuzzyMatch(t, kw))
+      !SYNONYMS.smart.some(kw => isFuzzyMatch(t, kw)) &&
+      !SYNONYMS.edustat.some(kw => isFuzzyMatch(t, kw))
     );
 
     let targetCC = null;
@@ -531,6 +541,36 @@ function Chatbot({
     // 3. SEMANTIC QUERY CLASSIFICATIONS
     const classification = classifyQuery(q);
     const limit = classification.limit;
+
+    // A0. CATEGORY: BEST EDUSTAT SCHOOL
+    if (classification.category === 'bestEduStat') {
+      const sorted = [...enrichedSchools].sort((a, b) => b.eduHours - a.eduHours);
+      return (
+        <div className="space-y-3 font-sans text-xs">
+          <p className="font-extrabold text-amber-700 dark:text-amber-400 uppercase text-[10px] tracking-wider">💻 Top {limit} Schools by EduStat Usages</p>
+          <div className="overflow-x-auto border rounded-xl max-h-48 overflow-y-auto">
+            <table className="min-w-full text-[11px] text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-100 dark:bg-slate-850 font-bold border-b dark:border-slate-800">
+                  <th className="p-2.5">School Name</th>
+                  <th className="p-2.5 text-center">Sync Hours</th>
+                  <th className="p-2.5 text-center">CC Name</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-150 dark:divide-slate-800">
+                {sorted.slice(0, limit).map((s, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
+                    <td className="p-2.5 truncate max-w-[150px] font-medium">{s.schoolName}</td>
+                    <td className="p-2.5 text-center font-bold font-mono text-amber-600 dark:text-amber-400">{s.eduHours.toFixed(1)} hrs</td>
+                    <td className="p-2.5 text-center truncate max-w-[100px]">{s.visitorName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
 
     // A. CATEGORY: BEST SMART CLASS SCHOOL
     if (classification.category === 'bestSmartClass') {
