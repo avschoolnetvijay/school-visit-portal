@@ -52,7 +52,17 @@ export const getMonthsInRange = (start, end) => {
   const s = new Date(start);
   const e = new Date(end);
   if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
-  return (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
+
+  // Set both dates to midnight to calculate purely by date difference
+  const sMidnight = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  const eMidnight = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+
+  // Difference in days (inclusive of the end date since QPR spans full days)
+  const diffTime = Math.abs(eMidnight - sMidnight);
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+  // Compute number of months based on standard 30-day block rounding
+  return Math.max(1, Math.round(diffDays / 30));
 };
 
 export const calculateStatus = (unique, target) => {
