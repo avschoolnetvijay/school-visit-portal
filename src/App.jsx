@@ -1703,6 +1703,7 @@ const App = () => {
                             const inTimeKey = cleanKeys.find(k => k.clean.includes('intime') || k.clean.includes('login'))?.orig;
                             const outTimeKey = cleanKeys.find(k => k.clean.includes('outtime') || k.clean.includes('logout'))?.orig;
                             const theoryPracticalKey = cleanKeys.find(k => k.clean.includes('theory') || k.clean.includes('practical') || k.clean.includes('sessiontype'))?.orig;
+                            const remarksKey = cleanKeys.find(k => k.clean.includes('remark') || k.clean.includes('topic') || k.clean.includes('covered'))?.orig;
                             
                             if (!labKey || !subKey) missingKeysAlert = true;
                             
@@ -1745,7 +1746,8 @@ const App = () => {
                                 inTime: inTimeVal,
                                 outTime: outTimeVal,
                                 totalHour: totalHourVal,
-                                theoryPractical: theoryPracticalKey ? String(r[theoryPracticalKey]).trim() : ''
+                                theoryPractical: theoryPracticalKey ? String(r[theoryPracticalKey]).trim() : '',
+                                remarks: remarksKey ? String(r[remarksKey]).trim() : ''
                             };
                         });
                         
