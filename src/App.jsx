@@ -1305,6 +1305,46 @@ const App = () => {
         };
     }, [schools, combinedVisits, startDate, endDate, selZones, selProjects, selDistricts, selBlocks, selCCs, ccNameMapping, selSchools]);
 
+    // Filtered EduStat App Usage data according to active filters (Zone, Project, District, Block, CC, School, Date Range)
+    const filteredEdustatApp = useMemo(() => {
+        if (!edustatApp || edustatApp.length === 0) return [];
+
+        let fSchools = schools;
+        if (selZones.length) fSchools = fSchools.filter(s => selZones.includes(s.zone));
+        if (selProjects.length) fSchools = fSchools.filter(s => selProjects.includes(s.project_name));
+        if (selDistricts.length) fSchools = fSchools.filter(s => selDistricts.includes(s.district));
+        if (selBlocks.length) fSchools = fSchools.filter(s => selBlocks.includes(s.block));
+        if (selCCs.length) {
+            fSchools = fSchools.filter(s => {
+                const name = s.visitor_name || '';
+                const resolved = ccNameMapping[name] || name;
+                return selCCs.includes(resolved) || selCCs.includes(name);
+            });
+        }
+        if (selSchools.length) fSchools = fSchools.filter(s => selSchools.includes(s.school_name || s.school));
+
+        const validUdise = new Set(fSchools.map(s => String(s.udise_code || s.udise)));
+
+        const schoolNameMap = {};
+        schools.forEach(s => {
+            const u = String(s.udise_code || s.udise || '').trim();
+            if (u) schoolNameMap[u] = s.school_name || s.school;
+        });
+
+        const hasActiveFilter = (selZones.length > 0 || selProjects.length > 0 || selDistricts.length > 0 || selBlocks.length > 0 || selCCs.length > 0 || selSchools.length > 0);
+
+        return edustatApp
+            .filter(r => {
+                if (r.date && (r.date < startDate || r.date > endDate)) return false;
+                if (hasActiveFilter && r.udise && !validUdise.has(String(r.udise))) return false;
+                return true;
+            })
+            .map(r => {
+                const mappedName = r.udise ? schoolNameMap[String(r.udise)] : null;
+                return mappedName ? { ...r, schoolName: mappedName } : r;
+            });
+    }, [edustatApp, schools, selZones, selProjects, selDistricts, selBlocks, selCCs, selSchools, startDate, endDate, ccNameMapping]);
+
     // Secure Auto-Fetch from Google Sheets (via Netlify proxy)
     const fetchFromGoogleSheet = async () => {
         if (userRole !== 'admin') {
@@ -2415,7 +2455,7 @@ const App = () => {
         if (activeTab === 'school-performance') return <SchoolPerformance schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} onRegisterExport={setCustomExportHandler} userPermissions={userPermissions} />;
         if (activeTab === 'school-search') return <SchoolWiseSearch schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} visits={combinedVisits} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} darkMode={darkMode} onDrillDown={handleDrillDown} initialUdise={drillToUdise} visitsChecklist={visitsChecklist} onSaveChecklist={handleSaveChecklist} />;
         if (activeTab === 'cc-analysis') return <CcDefAnalysis schools={schools} visits={combinedVisits} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} startDate={startDate} endDate={endDate} ccNameMapping={ccNameMapping} darkMode={darkMode} onNavigateToSchool={handleNavigateToSchool} manpower={manpower} edustatMaster={edustatMaster} onDrillDown={handleDrillDown} visit360={visit360} visitsChecklist={visitsChecklist} onSaveChecklist={handleSaveChecklist} />;
-        if (activeTab === 'edustat-app') return <EduStatApplication edustatAppData={edustatApp} schools={schools} />;
+        if (activeTab === 'edustat-app') return <EduStatApplication edustatAppData={filteredEdustatApp} schools={processedData.schools} />;
         if (activeTab === 'plan') return <PlanView data={processedData} allVisits={combinedVisits} manpower={manpower} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} schools={schools} startDate={startDate} endDate={endDate} />;
         if (activeTab === 'compliance') return <ComplianceView data={processedData} />;
         if (activeTab === 'reports') return <ReportsView data={processedData} />;
