@@ -612,12 +612,12 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
     { title: "⭐ J-Guruji Adoption", value: `${formatHours(kpi.totalJgurujiHours)} (${kpi.overallJgurujiPerc.toFixed(1)}%)`, icon: <StarIcon />, color: "from-sky-500 to-sky-600" }
   ];
 
-  // Column Chart Data for Device UpTime Allocation (Pic 2 replacement)
+  // Column Chart Data for Device UpTime Allocation (Includes % in labelText)
   const uptimeColumnData = [
-    { name: 'Educational Apps', hours: kpi.totalEduHours, perc: kpi.overallEduPerc, fill: '#059669' },
-    { name: '⭐ J-Guruji', hours: kpi.totalJgurujiHours, perc: kpi.overallJgurujiPerc, fill: '#0284c7' },
-    { name: 'Non-Educational', hours: kpi.totalNonEduHours, perc: kpi.overallNonEduPerc, fill: '#e11d48' },
-    { name: 'Idle / Unused', hours: kpi.totalIdleHours, perc: kpi.overallIdlePerc, fill: '#64748b' }
+    { name: 'Educational Apps', hours: kpi.totalEduHours, perc: kpi.overallEduPerc, fill: '#059669', labelText: `${formatHours(kpi.totalEduHours)} (${kpi.overallEduPerc.toFixed(1)}%)` },
+    { name: '⭐ J-Guruji', hours: kpi.totalJgurujiHours, perc: kpi.overallJgurujiPerc, fill: '#0284c7', labelText: `${formatHours(kpi.totalJgurujiHours)} (${kpi.overallJgurujiPerc.toFixed(1)}%)` },
+    { name: 'Non-Educational', hours: kpi.totalNonEduHours, perc: kpi.overallNonEduPerc, fill: '#e11d48', labelText: `${formatHours(kpi.totalNonEduHours)} (${kpi.overallNonEduPerc.toFixed(1)}%)` },
+    { name: 'Idle / Unused', hours: kpi.totalIdleHours, perc: kpi.overallIdlePerc, fill: '#64748b', labelText: `${formatHours(kpi.totalIdleHours)} (${kpi.overallIdlePerc.toFixed(1)}%)` }
   ];
 
   // Drill-down Modal Data filtering
@@ -656,7 +656,109 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
         ))}
       </div>
 
-      {/* PIC 1 FEATURE: Active Devices & UpTime Over Time (Smooth Area Chart) */}
+      {/* Main Charts Row: Pic 4 App Usage Breakdown Table & Pic 2 Column Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* PIC 4 FEATURE: Application Usage Breakdown Table (SHOWS TOP 5, EXPORT DOWNLOADS ALL) */}
+        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              <span>Application Usage Breakdown</span>
+              <span className="text-[10px] text-slate-400 font-normal normal-case">(Top 5 Active Apps)</span>
+            </h3>
+            <button
+              onClick={() => downloadCSV(appUsageList.map((a, i) => ({
+                'Sr No.': String(i + 1).padStart(2, '0'),
+                'App Name': a.displayName,
+                'Total Devices': a.totalDevices,
+                'Hours': formatHours(a.hours),
+                'Category': a.category
+              })), 'Full_Application_Usage_Breakdown.csv')}
+              className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
+              title="Download complete list of all applications"
+            >
+              📥 Export All Apps (CSV)
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-purple-50/70 dark:bg-slate-800 text-purple-900 dark:text-purple-300 font-bold border-b border-purple-100 dark:border-slate-700">
+                  <th className="p-3 w-16">Sr No.</th>
+                  <th className="p-3">App Name</th>
+                  <th className="p-3 text-center">Total Devices</th>
+                  <th className="p-3">Hours</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {appUsageList.slice(0, 5).map((app, i) => {
+                  const perc = Math.min(100, Math.max(5, (app.hours / maxAppHours) * 100));
+                  return (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                      <td className="p-3 font-mono text-slate-400 font-semibold">{String(i + 1).padStart(2, '0')}</td>
+                      <td className="p-3 font-semibold text-slate-700 dark:text-slate-200">{app.displayName}</td>
+                      <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400 font-mono text-sm">{app.totalDevices}</td>
+                      <td className="p-3">
+                        <div className="space-y-1">
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{formatHours(app.hours)}</span>
+                          <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${perc}%`, backgroundColor: app.fill || '#6366f1' }}
+                            ></div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {appUsageList.length === 0 && (
+                  <tr>
+                    <td colSpan="4" className="p-6 text-center text-slate-400">No application usage data recorded.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {appUsageList.length > 5 && (
+            <p className="text-[10px] text-slate-400 italic text-right mt-2">
+              Showing top 5 active apps on screen. Click "Export All Apps" to download complete list ({appUsageList.length} apps).
+            </p>
+          )}
+        </div>
+
+        {/* PIC 2 FEATURE: Device UpTime Allocation (Vertical Column Chart with % Labels) */}
+        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
+          <ChartToolbar chartId="uptime-column-chart" csvData={uptimeColumnData} filename="uptime-allocation-column-chart" />
+          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">
+            Device UpTime Allocation (Active vs Idle)
+          </h3>
+          <div className="h-[280px]" id="uptime-column-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={uptimeColumnData} margin={{ top: 25, right: 20, left: 10, bottom: 25 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 'bold' }} />
+                <YAxis tickFormatter={(v) => formatHours(v)} tick={{ fontSize: 10 }} />
+                <Tooltip content={<PremiumChartTooltip />} />
+                <Bar dataKey="hours" radius={[8, 8, 0, 0]}>
+                  {uptimeColumnData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                  <LabelList
+                    dataKey="labelText"
+                    position="top"
+                    style={{ fontSize: '11px', fontWeight: 'bold', fill: '#334155' }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+      </div>
+
+      {/* PIC 1 FEATURE: Active Devices & UpTime Over Time (Smooth Area Chart - POSITIONED BELOW BREAKDOWN & ALLOCATION) */}
       <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative">
         <ChartToolbar chartId="active-devices-area-chart" csvData={dailyTrendList} filename="active-devices-trend" />
         <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider flex items-center gap-2">
@@ -708,103 +810,6 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
             </AreaChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      {/* Main Charts Row: Pic 4 App Usage Breakdown Table & Pic 2 Column Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* PIC 4 FEATURE: Application Usage Breakdown Table with Progress Bars */}
-        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
-              <span>Application Usage Breakdown</span>
-              <span className="text-[10px] text-slate-400 font-normal normal-case">(Active Apps)</span>
-            </h3>
-            <button
-              onClick={() => downloadCSV(appUsageList.map((a, i) => ({
-                'Sr No.': String(i + 1).padStart(2, '0'),
-                'App Name': a.displayName,
-                'Total Devices': a.totalDevices,
-                'Hours': formatHours(a.hours),
-                'Category': a.category
-              })), 'Application_Usage_Breakdown.csv')}
-              className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
-            >
-              📥 Export CSV
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-purple-50/70 dark:bg-slate-800 text-purple-900 dark:text-purple-300 font-bold border-b border-purple-100 dark:border-slate-700">
-                  <th className="p-3 w-16">Sr No.</th>
-                  <th className="p-3">App Name</th>
-                  <th className="p-3 text-center">Total Devices</th>
-                  <th className="p-3">Hours</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {appUsageList.slice(0, 10).map((app, i) => {
-                  const perc = Math.min(100, Math.max(5, (app.hours / maxAppHours) * 100));
-                  return (
-                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                      <td className="p-3 font-mono text-slate-400 font-semibold">{String(i + 1).padStart(2, '0')}</td>
-                      <td className="p-3 font-semibold text-slate-700 dark:text-slate-200">{app.displayName}</td>
-                      <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400 font-mono text-sm">{app.totalDevices}</td>
-                      <td className="p-3">
-                        <div className="space-y-1">
-                          <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{formatHours(app.hours)}</span>
-                          <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{ width: `${perc}%`, backgroundColor: app.fill || '#6366f1' }}
-                            ></div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {appUsageList.length === 0 && (
-                  <tr>
-                    <td colSpan="4" className="p-6 text-center text-slate-400">No application usage data recorded.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* PIC 2 FEATURE: Device UpTime Allocation (Vertical Column Chart) */}
-        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
-          <ChartToolbar chartId="uptime-column-chart" csvData={uptimeColumnData} filename="uptime-allocation-column-chart" />
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">
-            Device UpTime Allocation (Active vs Idle)
-          </h3>
-          <div className="h-[320px]" id="uptime-column-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={uptimeColumnData} margin={{ top: 25, right: 20, left: 10, bottom: 25 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 'bold' }} />
-                <YAxis tickFormatter={(v) => formatHours(v)} tick={{ fontSize: 10 }} />
-                <Tooltip content={<PremiumChartTooltip />} />
-                <Bar dataKey="hours" radius={[8, 8, 0, 0]}>
-                  {uptimeColumnData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                  <LabelList
-                    dataKey="hours"
-                    position="top"
-                    formatter={(v) => formatHours(v)}
-                    style={{ fontSize: '11px', fontWeight: 'bold', fill: '#475569' }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
       </div>
 
       {/* AI Insights & Operational Alerts Panel (CLICKABLE FOR DRILL-DOWN) */}
