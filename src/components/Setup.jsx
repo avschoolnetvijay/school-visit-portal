@@ -24,10 +24,13 @@ const Setup = ({
     visitsMeta,
     jhpmsLabMeta,
     edustatMeta,
+    edustatApp = [],
+    edustatAppMeta,
     visit360Meta,
     activeVisits = null,
     activeJhpmsLab = null,
     activeEdustat = null,
+    activeEdustatApp = null,
     activeVisit360 = null,
     onDeleteRange
 }) => {
@@ -236,6 +239,13 @@ const Setup = ({
                             <div className="font-bold text-violet-700 mb-2 text-xs uppercase">4b. Edustat Daily Logs</div>
                             <input type="file" onChange={(e) => onUpload(e, 'edustat')} accept=".xlsx" className="text-xs w-full cursor-pointer" />
                         </div>
+                        <div className="border border-dashed border-gray-300 rounded p-6 hover:border-pink-500 bg-gray-50 transition relative">
+                            <div className="font-bold text-pink-700 mb-2 text-xs uppercase flex items-center justify-between">
+                                <span>4c. EduStat App Usage Report</span>
+                                <span className="text-[9px] bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded font-black">NEW</span>
+                            </div>
+                            <input type="file" onChange={(e) => onUpload(e, 'edustat_app')} accept=".xlsx" className="text-xs w-full cursor-pointer" />
+                        </div>
                         {userRole === 'admin' ? (
                             <div className="border border-dashed border-gray-300 rounded p-6 hover:border-indigo-500 bg-gray-50 transition relative">
                                 <div className="font-bold text-indigo-700 mb-2 text-xs uppercase">5. Instructor Profile</div>
@@ -279,6 +289,8 @@ const Setup = ({
                         <span className={status.edustat_master ? "text-green-600" : "text-gray-400"}>● Edustat Master: {status.edustat_master || 0}</span>
                         <span className="text-gray-300">|</span>
                         <span className={status.edustat ? "text-green-600" : "text-gray-400"}>● Daily Logs: {status.edustat || 0}</span>
+                        <span className="text-gray-300">|</span>
+                        <span className={status.edustat_app ? "text-green-600" : "text-gray-400"}>● App Usage: {status.edustat_app || 0}</span>
                         <span className="text-gray-300">|</span>
                         <span className={status.manpower ? "text-green-600" : "text-gray-400"}>● Manpower: {status.manpower || 0}</span>
                         <span className="text-gray-300">|</span>
@@ -450,6 +462,22 @@ const Setup = ({
                                     {calculateDateRanges(timelineEdustat, 'date')}
                                 </td>
                                 <td className="py-3 px-2 text-gray-500 font-medium">{getMetaString(edustatMeta)}</td>
+                            </tr>
+                            {/* Edustat Application Usage Report */}
+                            <tr>
+                                <td className="py-3 px-2 font-semibold text-pink-800">4c. EduStat Application Usage Report</td>
+                                <td className="py-3 px-2 text-center">
+                                    {edustatAppMeta?.is_temp ? (
+                                        <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-extrabold uppercase animate-pulse">Session</span>
+                                    ) : (
+                                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[9px] font-extrabold uppercase">Cloud</span>
+                                    )}
+                                </td>
+                                <td className="py-3 px-2 text-right font-mono font-bold text-pink-700">{edustatApp.length.toLocaleString('en-IN')}</td>
+                                <td className="py-3 px-2 text-slate-800 font-semibold tracking-wide">
+                                    {calculateDateRanges(timelineEdustatApp, 'date')}
+                                </td>
+                                <td className="py-3 px-2 text-gray-500 font-medium">{getMetaString(edustatAppMeta)}</td>
                             </tr>
                             {/* Manpower Roster */}
                             <tr>

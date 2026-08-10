@@ -21,6 +21,7 @@ const CcDefAnalysis = React.lazy(() => import('./components/CcDefAnalysis'));
 const ZonePerformance = React.lazy(() => import('./components/ZonePerformance'));
 const DistrictPerformance = React.lazy(() => import('./components/DistrictPerformance'));
 const ReviewMeeting = React.lazy(() => import('./components/ReviewMeeting'));
+const EduStatApplication = React.lazy(() => import('./components/EduStatApplication'));
 
 const prefetchTab = (tabId) => {
     switch (tabId) {
@@ -35,6 +36,7 @@ const prefetchTab = (tabId) => {
         case 'district-performance': import('./components/DistrictPerformance'); break;
         case 'school-performance': import('./components/SchoolPerformance'); break;
         case 'school-search': import('./components/SchoolWiseSearch'); break;
+        case 'edustat-app': import('./components/EduStatApplication'); break;
         case 'user-creation':
         case 'user-list':
         case 'user-permissions': import('./components/ProfileCreation'); break;
@@ -260,6 +262,7 @@ const App = () => {
     }, []);
     const [jhpmsLab, setJhpmsLab] = useState([]);
     const [edustat, setEdustat] = useState([]);
+    const [edustatApp, setEdustatApp] = useState([]);
     const [edustatMaster, setEdustatMaster] = useState([]);
     const [manpower, setManpower] = useState([]);
     const [visit360, setVisit360] = useState([]);
@@ -269,6 +272,7 @@ const App = () => {
     const [tempVisits, setTempVisits] = useState([]);
     const [tempJhpmsLab, setTempJhpmsLab] = useState([]);
     const [tempEdustat, setTempEdustat] = useState([]);
+    const [tempEdustatApp, setTempEdustatApp] = useState([]);
 
     useEffect(() => {
         try {
@@ -290,6 +294,12 @@ const App = () => {
             console.warn("Failed to parse snet_temp_edustat from sessionStorage", err);
         }
         try {
+            const ea = sessionStorage.getItem('snet_temp_edustat_app');
+            if (ea) setTempEdustatApp(JSON.parse(ea));
+        } catch (err) {
+            console.warn("Failed to parse snet_temp_edustat_app from sessionStorage", err);
+        }
+        try {
             const photo = localStorage.getItem('snet_profile_photo');
             if (photo) setProfilePhoto(photo);
         } catch (e) {
@@ -306,20 +316,24 @@ const App = () => {
     const [visitsMeta, setVisitsMeta] = useState(null);
     const [jhpmsLabMeta, setJhpmsLabMeta] = useState(null);
     const [edustatMeta, setEdustatMeta] = useState(null);
+    const [edustatAppMeta, setEdustatAppMeta] = useState(null);
     const [visit360Meta, setVisit360Meta] = useState(null);
 
     // User Specific Custom Upload Overlays
     const [userVisits, setUserVisits] = useState([]);
     const [userJhpmsLab, setUserJhpmsLab] = useState([]);
     const [userEdustat, setUserEdustat] = useState([]);
+    const [userEdustatApp, setUserEdustatApp] = useState([]);
     const [userVisitsMeta, setUserVisitsMeta] = useState(null);
     const [userJhpmsLabMeta, setUserJhpmsLabMeta] = useState(null);
     const [userEdustatMeta, setUserEdustatMeta] = useState(null);
+    const [userEdustatAppMeta, setUserEdustatAppMeta] = useState(null);
 
     // Admin Baseline cache for merging (Standard User mode)
     const [baselineVisits, setBaselineVisits] = useState([]);
     const [baselineJhpmsLab, setBaselineJhpmsLab] = useState([]);
     const [baselineEdustat, setBaselineEdustat] = useState([]);
+    const [baselineEdustatApp, setBaselineEdustatApp] = useState([]);
 
     const [drillDownData, setDrillDownData] = useState(null);
     const [drillToUdise, setDrillToUdise] = useState(null);
@@ -507,7 +521,8 @@ const App = () => {
                     { id: 'district-performance', label: 'District Performance', icon: Icons.Performance },
                     { id: 'school-performance', label: 'School Performance', icon: Icons.Trophy },
                     { id: 'school-search', label: 'School Wise Search', icon: Icons.GlobalSearch },
-                    { id: 'cc-analysis', label: 'CC/DEF Analysis', icon: Icons.Users }
+                    { id: 'cc-analysis', label: 'CC/DEF Analysis', icon: Icons.Users },
+                    { id: 'edustat-app', label: 'EduStat Application', icon: Icons.Analytics }
                 ]
             },
             {
@@ -873,7 +888,7 @@ const App = () => {
                 let userVM = null, userJlM = null, userEM = null;
 
                 if (resolvedRole === 'admin') {
-                    const [resSchools, resVisits, resJhpms, resEdustat, resEdustatMaster, resManpower, resPhoto, resVMeta, resJlMeta, resEMeta, resV360, resV360Meta, resChecklist] = await Promise.all([
+                    const [resSchools, resVisits, resJhpms, resEdustat, resEdustatMaster, resManpower, resPhoto, resVMeta, resJlMeta, resEMeta, resV360, resV360Meta, resChecklist, resEApp, resEAppMeta] = await Promise.all([
                         get('schools'),
                         get('visits'),
                         get('jhpms_lab'),
@@ -886,7 +901,9 @@ const App = () => {
                         get('edustat_meta'),
                         get('visit360'),
                         get('visit360_meta'),
-                        get('visits_checklist')
+                        get('visits_checklist'),
+                        get('edustat_app'),
+                        get('edustat_app_meta')
                     ]);
                     s = resSchools;
                     v = resVisits;
@@ -901,6 +918,8 @@ const App = () => {
                     v360 = resV360;
                     v360Meta = resV360Meta;
                     vChecklist = resChecklist;
+                    if (resEApp) setEdustatApp(resEApp);
+                    if (resEAppMeta) setEdustatAppMeta(resEAppMeta);
                 } else {
                     const [
                         adminSchools,
@@ -1818,6 +1837,64 @@ const App = () => {
                                 hours: parsedHours
                             };
                         });
+                    } else if (type === 'edustat_app') {
+                        normalized = data.map(r => {
+                            const cleanKeys = Object.keys(r).map(k => ({ orig: k, clean: k.toLowerCase().replace(/[^a-z0-9]/g, '') }));
+                            const schKey = cleanKeys.find(k => k.clean.includes('schoolname') || k.clean === 'school')?.orig;
+                            const uKey = cleanKeys.find(k => k.clean.includes('udise'))?.orig;
+                            const distKey = cleanKeys.find(k => k.clean.includes('district'))?.orig;
+                            const blockKey = cleanKeys.find(k => k.clean.includes('block'))?.orig;
+                            const serialKey = cleanKeys.find(k => k.clean.includes('serialnumber') || k.clean.includes('serial'))?.orig;
+                            const dateKey = cleanKeys.find(k => k.clean.includes('processdate') || k.clean.includes('date'))?.orig;
+                            const procKey = cleanKeys.find(k => k.clean.includes('processname') || k.clean.includes('process') || k.clean.includes('app'))?.orig;
+                            const hrsKey = cleanKeys.find(k => k.clean.includes('totalhour') || k.clean.includes('hours') || k.clean.includes('usedhour') || k.clean.includes('duration'))?.orig;
+
+                            const rawDate = dateKey ? r[dateKey] : '';
+                            let parsedDate = '';
+                            if (rawDate) {
+                                const dObj = parseDateRobust(rawDate);
+                                if (dObj && !isNaN(dObj.getTime())) {
+                                    const year = dObj.getFullYear();
+                                    const month = String(dObj.getMonth() + 1).padStart(2, '0');
+                                    const day = String(dObj.getDate()).padStart(2, '0');
+                                    parsedDate = `${year}-${month}-${day}`;
+                                } else {
+                                    parsedDate = String(rawDate).trim();
+                                }
+                            }
+
+                            const rawHour = hrsKey ? r[hrsKey] : '0';
+                            let parsedHours = 0;
+                            if (typeof rawHour === 'number') {
+                                parsedHours = rawHour * (rawHour < 1 ? 24 : 1);
+                            } else if (rawHour) {
+                                const parts = String(rawHour).split(':');
+                                if (parts.length === 3) {
+                                    const hrs = parseInt(parts[0], 10) || 0;
+                                    const mins = parseInt(parts[1], 10) || 0;
+                                    const secs = parseInt(parts[2], 10) || 0;
+                                    parsedHours = hrs + (mins / 60) + (secs / 3600);
+                                } else if (parts.length === 2) {
+                                    const hrs = parseInt(parts[0], 10) || 0;
+                                    const mins = parseInt(parts[1], 10) || 0;
+                                    parsedHours = hrs + (mins / 60);
+                                } else {
+                                    const num = parseFloat(rawHour);
+                                    parsedHours = isNaN(num) ? 0 : num;
+                                }
+                            }
+
+                            return {
+                                schoolName: schKey ? String(r[schKey]).trim() : '',
+                                udise: uKey ? String(r[uKey]).trim() : '',
+                                district: distKey ? String(r[distKey]).trim() : '',
+                                block: blockKey ? String(r[blockKey]).trim() : '',
+                                serial: serialKey ? String(r[serialKey]).trim() : '',
+                                date: parsedDate,
+                                processName: procKey ? String(r[procKey]).trim() : '',
+                                hours: parsedHours
+                            };
+                        });
                     } else if (type === 'manpower') {
                         const parseManpowerDate = (rawDate) => {
                             if (!rawDate) return null;
@@ -2108,6 +2185,17 @@ const App = () => {
                                 alert(`Successfully uploaded and merged ${normalized.length} EduStat daily logs as your personal cloud overlay!${skippedMsg}`);
                             }
                         }
+                    } else if (type === 'edustat_app') {
+                        const meta = {
+                            last_uploaded_at: new Date().toISOString(),
+                            last_uploaded_by: localStorage.getItem('snet_username') || 'admin',
+                            is_temp: false
+                        };
+                        setEdustatApp(normalized);
+                        await set('edustat_app', normalized);
+                        setEdustatAppMeta(meta);
+                        await set('edustat_app_meta', meta);
+                        alert(`Successfully uploaded ${normalized.length.toLocaleString('en-IN')} EduStat Application Usage records!`);
                     } else if (type === 'edustat_master') {
                         if (userRole !== 'admin') {
                             alert("Access Denied: Only Administrator can upload EduStat Master Inventory.");
@@ -2215,6 +2303,7 @@ const App = () => {
                         visits: combinedVisits.length,
                         jhpms_lab: combinedJhpmsLab.length,
                         edustat: combinedEdustat.length,
+                        edustat_app: edustatApp.length,
                         edustat_master: edustatMaster.length,
                         manpower: manpower.length,
                         visit360: visit360.length
@@ -2223,6 +2312,7 @@ const App = () => {
                         visits: mergeVisits(userVisits, tempVisits).length,
                         jhpms_lab: mergeJhpms(userJhpmsLab, tempJhpmsLab).length,
                         edustat: mergeEdustat(userEdustat, tempEdustat).length,
+                        edustat_app: edustatApp.length,
                         edustat_master: edustatMaster.length,
                         manpower: 0,
                         visit360: visit360.length
@@ -2236,6 +2326,7 @@ const App = () => {
                     visits={userRole === 'admin' ? combinedVisits : mergeVisits(userVisits, tempVisits)}
                     jhpmsLab={userRole === 'admin' ? combinedJhpmsLab : mergeJhpms(userJhpmsLab, tempJhpmsLab)}
                     edustat={userRole === 'admin' ? combinedEdustat : mergeEdustat(userEdustat, tempEdustat)}
+                    edustatApp={edustatApp}
                     manpower={userRole === 'admin' ? manpower : []}
                     visit360={visit360}
                     ccNameMapping={ccNameMapping}
@@ -2245,10 +2336,12 @@ const App = () => {
                     visitsMeta={userRole === 'admin' ? visitsMeta : userVisitsMeta}
                     jhpmsLabMeta={userRole === 'admin' ? jhpmsLabMeta : userJhpmsLabMeta}
                     edustatMeta={userRole === 'admin' ? edustatMeta : userEdustatMeta}
+                    edustatAppMeta={userRole === 'admin' ? edustatAppMeta : userEdustatAppMeta}
                     visit360Meta={visit360Meta}
                     activeVisits={combinedVisits}
                     activeJhpmsLab={combinedJhpmsLab}
                     activeEdustat={combinedEdustat}
+                    activeEdustatApp={edustatApp}
                     activeVisit360={visit360}
                     onDeleteRange={handleDeleteRange}
                 />
@@ -2322,6 +2415,7 @@ const App = () => {
         if (activeTab === 'school-performance') return <SchoolPerformance schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} onRegisterExport={setCustomExportHandler} userPermissions={userPermissions} />;
         if (activeTab === 'school-search') return <SchoolWiseSearch schools={schools} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} manpower={manpower} visits={combinedVisits} startDate={startDate} endDate={endDate} selZones={selZones} selProjects={selProjects} selDistricts={selDistricts} selBlocks={selBlocks} selCCs={selCCs} ccNameMapping={ccNameMapping} workingDays={workingDays} darkMode={darkMode} onDrillDown={handleDrillDown} initialUdise={drillToUdise} visitsChecklist={visitsChecklist} onSaveChecklist={handleSaveChecklist} />;
         if (activeTab === 'cc-analysis') return <CcDefAnalysis schools={schools} visits={combinedVisits} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} startDate={startDate} endDate={endDate} ccNameMapping={ccNameMapping} darkMode={darkMode} onNavigateToSchool={handleNavigateToSchool} manpower={manpower} edustatMaster={edustatMaster} onDrillDown={handleDrillDown} visit360={visit360} visitsChecklist={visitsChecklist} onSaveChecklist={handleSaveChecklist} />;
+        if (activeTab === 'edustat-app') return <EduStatApplication edustatAppData={edustatApp} schools={schools} />;
         if (activeTab === 'plan') return <PlanView data={processedData} allVisits={combinedVisits} manpower={manpower} jhpmsLab={combinedJhpmsLab} edustat={combinedEdustat} edustatMaster={edustatMaster} schools={schools} startDate={startDate} endDate={endDate} />;
         if (activeTab === 'compliance') return <ComplianceView data={processedData} />;
         if (activeTab === 'reports') return <ReportsView data={processedData} />;

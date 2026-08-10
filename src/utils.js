@@ -65,6 +65,29 @@ export const getMonthsInRange = (start, end) => {
   return Math.max(1, Math.round(diffDays / 30));
 };
 
+// Parse time string (H:MM:SS or HH:MM:SS) or Excel serial number to decimal hours
+export const parseTimeToHours = (val) => {
+  if (val === null || val === undefined || val === '') return 0;
+  // If numeric (Excel serial number for time — fraction of a day)
+  if (typeof val === 'number') return val * 24;
+  const str = String(val).trim();
+  if (!str || str === '-' || str === '0') return 0;
+  // Match H:MM:SS or HH:MM:SS
+  const parts = str.split(':');
+  if (parts.length === 3) {
+    const h = parseInt(parts[0], 10) || 0;
+    const m = parseInt(parts[1], 10) || 0;
+    const s = parseInt(parts[2], 10) || 0;
+    return h + m / 60 + s / 3600;
+  }
+  if (parts.length === 2) {
+    const h = parseInt(parts[0], 10) || 0;
+    const m = parseInt(parts[1], 10) || 0;
+    return h + m / 60;
+  }
+  return parseFloat(str) || 0;
+};
+
 export const calculateStatus = (unique, target) => {
   if (target === 0) return { label: "N/A", color: "text-gray-400", val: -1 };
   const pct = (unique / target) * 100;
