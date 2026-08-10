@@ -516,36 +516,37 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
 
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Application Breakdown Chart (Excludes UpTime process) */}
+        {/* Application Breakdown Horizontal Bar Chart */}
         <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative lg:col-span-1">
-          <ChartToolbar chartId="app-donut-chart" csvData={appUsageList} filename="app-usage-breakdown" />
+          <ChartToolbar chartId="app-bar-chart" csvData={appUsageList} filename="app-usage-breakdown" />
           <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider flex items-center gap-2">
             <span>Application Usage Breakdown</span>
             <span className="text-[10px] text-slate-400 font-normal normal-case">(Active Apps)</span>
           </h3>
-          <div className="h-[300px]" id="app-donut-chart">
+          <div className="h-[300px]" id="app-bar-chart">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={appUsageList}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={65}
-                  outerRadius={95}
-                  paddingAngle={2}
-                  dataKey="hours"
-                >
-                  {appUsageList.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} stroke="rgba(255,255,255,0.1)" strokeWidth={2} />
-                  ))}
-                </Pie>
+              <BarChart
+                layout="vertical"
+                data={appUsageList}
+                margin={{ top: 5, right: 35, left: 25, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                <XAxis type="number" tickFormatter={(v) => formatHours(v)} tick={{ fontSize: 10 }} />
+                <YAxis dataKey="name" type="category" width={85} tick={{ fontSize: 11, fontWeight: 'bold' }} />
                 <Tooltip content={<PremiumChartTooltip />} />
-              </PieChart>
+                <Bar dataKey="hours" radius={[0, 6, 6, 0]} label={{ position: 'right', formatter: (v) => formatHours(v), fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}>
+                  {appUsageList.map((entry, index) => {
+                    const palette = ['#0d9488', '#0284c7', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#ca8a04', '#059669', '#2563eb', '#9333ea', '#e11d48', '#d97706'];
+                    const color = palette[index % palette.length];
+                    return <Cell key={`cell-${index}`} fill={color} />;
+                  })}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Usage Category Analysis: Active Apps vs Idle Time */}
+        {/* Usage Category Analysis: Active Apps vs Idle Time (PieChart with Data Labels) */}
         <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative lg:col-span-2">
           <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Device UpTime Allocation (Active vs Idle)</h3>
           <div className="flex flex-col md:flex-row h-[300px] gap-6">
@@ -560,6 +561,26 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
                       { name: 'Idle / Unused UpTime', value: kpi.totalIdleHours, fill: COLORS.system[0] }
                     ]}
                     cx="50%" cy="50%" outerRadius={95} dataKey="value"
+                    labelLine={false}
+                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                      if (!percent || percent < 0.03) return null;
+                      const RADIAN = Math.PI / 180;
+                      const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                      return (
+                        <text
+                          x={x}
+                          y={y}
+                          fill="#ffffff"
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          style={{ fontSize: '11px', fontWeight: '900', pointerEvents: 'none', filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.8))' }}
+                        >
+                          {`${(percent * 100).toFixed(1)}%`}
+                        </text>
+                      );
+                    }}
                   >
                     <Cell fill={COLORS.educational[0]} />
                     <Cell fill={COLORS.jguruji} />
@@ -619,34 +640,40 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
         </div>
       </div>
 
-      {/* AI Insights & Alerts Panel */}
-      <div className="portal-card bg-gradient-to-r from-teal-900/90 to-slate-900 text-white rounded-xl p-5 shadow-md">
-        <h3 className="text-sm font-bold mb-3 uppercase tracking-wider flex items-center gap-2 text-teal-300">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+      {/* AI Insights & Alerts Panel (High Contrast Dark Theme) */}
+      <div className="bg-slate-900 border border-slate-800 text-white rounded-xl p-5 shadow-xl">
+        <h3 className="text-sm font-extrabold mb-3 uppercase tracking-wider flex items-center gap-2 text-teal-400">
+          <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
           Smart AI Analytics & Operational Alerts
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="bg-white/10 backdrop-blur border border-white/10 rounded-lg p-3">
-            <span className="text-sky-300 font-bold uppercase text-[10px] block mb-1">⭐ J-Guruji Adoption Score</span>
-            <p className="leading-relaxed">
-              J-Guruji accounts for <strong className="text-white font-black">{kpi.overallJgurujiPerc.toFixed(1)}%</strong> of active app usage across <strong className="text-white">{kpi.schools}</strong> schools. 
-              {kpi.zeroJgurujiSchoolsCount > 0 ? ` ⚠️ ${kpi.zeroJgurujiSchoolsCount} schools have zero J-Guruji activity.` : ' Great adoption!'}
+          <div className="bg-slate-800/90 border border-slate-700/80 rounded-lg p-3.5 shadow-sm">
+            <span className="text-sky-400 font-extrabold uppercase text-[10px] tracking-wider block mb-1.5 flex items-center gap-1">
+              <span>⭐ J-GURUJI ADOPTION SCORE</span>
+            </span>
+            <p className="leading-relaxed text-slate-200 font-medium">
+              J-Guruji accounts for <strong className="text-sky-300 font-black bg-slate-900/80 px-1.5 py-0.5 rounded">{kpi.overallJgurujiPerc.toFixed(1)}%</strong> of active app usage across <strong className="text-white font-bold">{kpi.schools}</strong> schools. 
+              {kpi.zeroJgurujiSchoolsCount > 0 ? <span className="text-amber-300 font-bold block mt-1"> ⚠️ {kpi.zeroJgurujiSchoolsCount} schools have zero J-Guruji activity.</span> : <span className="text-emerald-300 font-bold block mt-1"> Great adoption rate!</span>}
             </p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur border border-white/10 rounded-lg p-3">
-            <span className="text-amber-300 font-bold uppercase text-[10px] block mb-1">💤 Idle Power Waste Warning</span>
-            <p className="leading-relaxed">
-              Devices were ON but idle for <strong className="text-amber-200 font-black">{formatHours(kpi.totalIdleHours)}</strong> ({kpi.overallIdlePerc.toFixed(1)}% of total uptime). 
-              <strong className="text-white font-bold">{kpi.idleHeavySchoolsCount}</strong> schools spend more time idle than active.
+          <div className="bg-slate-800/90 border border-slate-700/80 rounded-lg p-3.5 shadow-sm">
+            <span className="text-amber-400 font-extrabold uppercase text-[10px] tracking-wider block mb-1.5 flex items-center gap-1">
+              <span>💤 IDLE POWER WASTE WARNING</span>
+            </span>
+            <p className="leading-relaxed text-slate-200 font-medium">
+              Devices were ON but idle for <strong className="text-amber-300 font-black bg-slate-900/80 px-1.5 py-0.5 rounded">{formatHours(kpi.totalIdleHours)}</strong> ({kpi.overallIdlePerc.toFixed(1)}% of uptime). 
+              <span className="text-white font-bold block mt-1">{kpi.idleHeavySchoolsCount} schools spend more time idle than active.</span>
             </p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur border border-white/10 rounded-lg p-3">
-            <span className="text-emerald-300 font-bold uppercase text-[10px] block mb-1">🏆 District Leader</span>
-            <p className="leading-relaxed">
+          <div className="bg-slate-800/90 border border-slate-700/80 rounded-lg p-3.5 shadow-sm">
+            <span className="text-emerald-400 font-extrabold uppercase text-[10px] tracking-wider block mb-1.5 flex items-center gap-1">
+              <span>🏆 DISTRICT LEADER</span>
+            </span>
+            <p className="leading-relaxed text-slate-200 font-medium">
               {kpi.bestDistrict ? (
-                <>District <strong className="text-emerald-200 font-black">{kpi.bestDistrict.district}</strong> leads in J-Guruji adoption with {formatHours(kpi.bestDistrict.jguruji)} usage.</>
+                <>District <strong className="text-emerald-300 font-black bg-slate-900/80 px-1.5 py-0.5 rounded">{kpi.bestDistrict.district}</strong> leads in J-Guruji adoption with <strong className="text-white">{formatHours(kpi.bestDistrict.jguruji)}</strong> usage.</>
               ) : 'Active data loaded.'}
             </p>
           </div>
