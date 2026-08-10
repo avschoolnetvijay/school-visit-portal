@@ -421,6 +421,22 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
       })
       .sort((a, b) => b.jgurujiPerc - a.jgurujiPerc);
 
+    // AI Insights Generator & District Leader Project Mapping
+    const zeroJgurujiSchoolsCount = schoolTableData.filter(s => s.jgurujiHours === 0).length;
+    const idleHeavySchoolsCount = schoolTableData.filter(s => s.idleHours > s.activeAppHours).length;
+    const bestDistrict = districtList.length > 0 ? [...districtList].sort((a, b) => (b.jguruji / (b.activeApp || 1)) - (a.jguruji / (a.activeApp || 1)))[0] : null;
+
+    let bestDistrictProjects = '';
+    if (bestDistrict) {
+      const projSet = new Set();
+      schoolTableData.forEach(s => {
+        if (s.district.toLowerCase() === bestDistrict.district.toLowerCase() && s.projectName && s.projectName !== '-') {
+          projSet.add(s.projectName);
+        }
+      });
+      bestDistrictProjects = Array.from(projSet).join(', ') || '-';
+    }
+
     return {
       kpi: {
         devices: devices.size,
