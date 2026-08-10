@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
-  CartesianGrid, XAxis, YAxis, Tooltip
+  AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LabelList
 } from 'recharts';
 import { downloadSVG, downloadPNG, downloadCSV } from '../utils';
 
@@ -88,7 +88,7 @@ const PremiumChartTooltip = ({ active, payload, label }) => {
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: bulletColor }} />
                 <span>{p.name || p.dataKey}:</span>
               </div>
-              <span className="font-black text-white">{typeof p.value === 'number' ? formatHours(p.value) : p.value}</span>
+              <span className="font-black text-white">{typeof p.value === 'number' ? (p.dataKey === 'devices' ? p.value : formatHours(p.value)) : p.value}</span>
             </div>
           );
         })}
@@ -201,17 +201,25 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
         else if (cat === 'nonEducational') totalNonEduHours += h;
         else totalSysHours += h;
 
-        // App Usage breakdown (excluding UpTime from App Breakdown chart)
+        // App Usage breakdown (stores unique device serials per process)
         const appKey = procName || 'Unknown';
-        if (!appUsage[appKey]) appUsage[appKey] = { name: appKey, hours: 0, category: cat };
+        if (!appUsage[appKey]) appUsage[appKey] = { name: appKey, hours: 0, category: cat, devices: new Set() };
         appUsage[appKey].hours += h;
+        if (record.serial) appUsage[appKey].devices.add(record.serial);
       }
 
-      // Daily Usage Trend
+      // Daily Usage Trend (tracks activeApp hours & unique devices per date)
       if (record.date) {
-        if (!dailyUsage[record.date]) dailyUsage[record.date] = { date: record.date, educational: 0, nonEducational: 0, system: 0, uptime: 0 };
-        if (isUpTime) dailyUsage[record.date].uptime += h;
-        else dailyUsage[record.date][cat] += h;
+        if (!dailyUsage[record.date]) {
+          dailyUsage[record.date] = { date: record.date, educational: 0, nonEducational: 0, system: 0, uptime: 0, activeApp: 0, devices: new Set() };
+        }
+        if (isUpTime) {
+          dailyUsage[record.date].uptime += h;
+        } else {
+          dailyUsage[record.date][cat] += h;
+          dailyUsage[record.date].activeApp += h;
+        }
+        if (record.serial) dailyUsage[record.date].devices.add(record.serial);
       }
 
       // District Usage
@@ -312,10 +320,23 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
       .sort((a, b) => b.hours - a.hours)
       .map((app, i) => {
         let colorList = COLORS[app.category] || COLORS.system;
-        return { ...app, fill: colorList[i % colorList.length] };
+        return {
+          ...app,
+          totalDevices: app.devices.size,
+          displayName: `${app.name} Usage`,
+          fill: colorList[i % colorList.length]
+        };
       });
 
-    const dailyTrendList = Object.values(dailyUsage).sort((a, b) => a.date.localeCompare(b.date));
+    const maxAppHours = appUsageList.length > 0 ? appUsageList[0].hours : 1;
+
+    const dailyTrendList = Object.values(dailyUsage)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(d => ({
+        ...d,
+        activeDevicesCount: d.devices.size
+      }));
+
     const districtList = Object.values(districtUsage).sort((a, b) => b.uptime - a.uptime);
 
     // School Table Data
@@ -405,6 +426,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
         bestDistrictProjects
       },
       appUsageList,
+      maxAppHours,
       dailyTrendList,
       districtList,
       schoolTableData,
@@ -497,7 +519,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
     return sortedAndFilteredDevices.slice(start, start + deviceRowsPerPage);
   }, [sortedAndFilteredDevices, deviceCurrentPage, deviceRowsPerPage]);
 
-  // Export School Report (Includes Project Name, CC/DEF Details, ICT Instructor)
+  // Export School Report
   const exportSchoolData = () => {
     if (!processedData) return;
     const exportRows = processedData.schoolTableData.map(s => ({
@@ -522,7 +544,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
     downloadCSV(exportRows, `Edustat_School_Level_Report.csv`);
   };
 
-  // Export Device-Wise Report (Includes Project Name, CC/DEF Details, ICT Instructor)
+  // Export Device-Wise Report
   const exportDeviceData = () => {
     if (!processedData) return;
     const exportRows = processedData.deviceTableData.map(d => ({
@@ -579,7 +601,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
     );
   }
 
-  const { kpi, appUsageList, schoolTableData } = processedData;
+  const { kpi, appUsageList, maxAppHours, dailyTrendList, schoolTableData } = processedData;
 
   const kpiCards = [
     { title: "Total Devices", value: kpi.devices, icon: <MonitorIcon />, color: "from-blue-500 to-blue-600" },
@@ -588,6 +610,14 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
     { title: "Active App Usage", value: `${formatHours(kpi.totalActiveAppHours)} (${kpi.overallActiveUtilPerc.toFixed(1)}%)`, icon: <PlayIcon />, color: "from-emerald-500 to-emerald-600" },
     { title: "Idle / Unused Hours", value: `${formatHours(kpi.totalIdleHours)} (${kpi.overallIdlePerc.toFixed(1)}%)`, icon: <PauseIcon />, color: "from-amber-500 to-amber-600" },
     { title: "⭐ J-Guruji Adoption", value: `${formatHours(kpi.totalJgurujiHours)} (${kpi.overallJgurujiPerc.toFixed(1)}%)`, icon: <StarIcon />, color: "from-sky-500 to-sky-600" }
+  ];
+
+  // Column Chart Data for Device UpTime Allocation (Pic 2 replacement)
+  const uptimeColumnData = [
+    { name: 'Educational Apps', hours: kpi.totalEduHours, perc: kpi.overallEduPerc, fill: '#059669' },
+    { name: '⭐ J-Guruji', hours: kpi.totalJgurujiHours, perc: kpi.overallJgurujiPerc, fill: '#0284c7' },
+    { name: 'Non-Educational', hours: kpi.totalNonEduHours, perc: kpi.overallNonEduPerc, fill: '#e11d48' },
+    { name: 'Idle / Unused', hours: kpi.totalIdleHours, perc: kpi.overallIdlePerc, fill: '#64748b' }
   ];
 
   // Drill-down Modal Data filtering
@@ -626,130 +656,155 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
         ))}
       </div>
 
-      {/* Main Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Application Breakdown Horizontal Bar Chart */}
-        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative lg:col-span-1">
-          <ChartToolbar chartId="app-bar-chart" csvData={appUsageList} filename="app-usage-breakdown" />
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider flex items-center gap-2">
-            <span>Application Usage Breakdown</span>
-            <span className="text-[10px] text-slate-400 font-normal normal-case">(Active Apps)</span>
+      {/* PIC 1 FEATURE: Active Devices & UpTime Over Time (Smooth Area Chart) */}
+      <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative">
+        <ChartToolbar chartId="active-devices-area-chart" csvData={dailyTrendList} filename="active-devices-trend" />
+        <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider flex items-center gap-2">
+          <span>Active Usage & UpTime Over Time</span>
+          <span className="text-[10px] text-slate-400 font-normal normal-case">(Daily Trend Analysis)</span>
+        </h3>
+        <div className="h-[280px]" id="active-devices-area-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={dailyTrendList} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
+              <defs>
+                <linearGradient id="gradientUptime" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
+                </linearGradient>
+                <linearGradient id="gradientActive" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10 }}
+                angle={-35}
+                textAnchor="end"
+                interval="preserveStartEnd"
+              />
+              <YAxis tickFormatter={(v) => formatHours(v)} tick={{ fontSize: 10 }} />
+              <Tooltip content={<PremiumChartTooltip />} />
+              <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+              <Area
+                type="monotone"
+                dataKey="uptime"
+                name="Total Device UpTime"
+                stroke="#2563eb"
+                strokeWidth={2.5}
+                fillOpacity={1}
+                fill="url(#gradientUptime)"
+              />
+              <Area
+                type="monotone"
+                dataKey="activeApp"
+                name="Active App Usage"
+                stroke="#059669"
+                strokeWidth={2.5}
+                fillOpacity={1}
+                fill="url(#gradientActive)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Main Charts Row: Pic 4 App Usage Breakdown Table & Pic 2 Column Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* PIC 4 FEATURE: Application Usage Breakdown Table with Progress Bars */}
+        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              <span>Application Usage Breakdown</span>
+              <span className="text-[10px] text-slate-400 font-normal normal-case">(Active Apps)</span>
+            </h3>
+            <button
+              onClick={() => downloadCSV(appUsageList.map((a, i) => ({
+                'Sr No.': String(i + 1).padStart(2, '0'),
+                'App Name': a.displayName,
+                'Total Devices': a.totalDevices,
+                'Hours': formatHours(a.hours),
+                'Category': a.category
+              })), 'Application_Usage_Breakdown.csv')}
+              className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
+            >
+              📥 Export CSV
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-purple-50/70 dark:bg-slate-800 text-purple-900 dark:text-purple-300 font-bold border-b border-purple-100 dark:border-slate-700">
+                  <th className="p-3 w-16">Sr No.</th>
+                  <th className="p-3">App Name</th>
+                  <th className="p-3 text-center">Total Devices</th>
+                  <th className="p-3">Hours</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {appUsageList.slice(0, 10).map((app, i) => {
+                  const perc = Math.min(100, Math.max(5, (app.hours / maxAppHours) * 100));
+                  return (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                      <td className="p-3 font-mono text-slate-400 font-semibold">{String(i + 1).padStart(2, '0')}</td>
+                      <td className="p-3 font-semibold text-slate-700 dark:text-slate-200">{app.displayName}</td>
+                      <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400 font-mono text-sm">{app.totalDevices}</td>
+                      <td className="p-3">
+                        <div className="space-y-1">
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{formatHours(app.hours)}</span>
+                          <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${perc}%`, backgroundColor: app.fill || '#6366f1' }}
+                            ></div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {appUsageList.length === 0 && (
+                  <tr>
+                    <td colSpan="4" className="p-6 text-center text-slate-400">No application usage data recorded.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* PIC 2 FEATURE: Device UpTime Allocation (Vertical Column Chart) */}
+        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
+          <ChartToolbar chartId="uptime-column-chart" csvData={uptimeColumnData} filename="uptime-allocation-column-chart" />
+          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">
+            Device UpTime Allocation (Active vs Idle)
           </h3>
-          <div className="h-[300px]" id="app-bar-chart">
+          <div className="h-[320px]" id="uptime-column-chart">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                layout="vertical"
-                data={appUsageList}
-                margin={{ top: 5, right: 35, left: 25, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                <XAxis type="number" tickFormatter={(v) => formatHours(v)} tick={{ fontSize: 10 }} />
-                <YAxis dataKey="name" type="category" width={85} tick={{ fontSize: 11, fontWeight: 'bold' }} />
+              <BarChart data={uptimeColumnData} margin={{ top: 25, right: 20, left: 10, bottom: 25 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 'bold' }} />
+                <YAxis tickFormatter={(v) => formatHours(v)} tick={{ fontSize: 10 }} />
                 <Tooltip content={<PremiumChartTooltip />} />
-                <Bar dataKey="hours" radius={[0, 6, 6, 0]} label={{ position: 'right', formatter: (v) => formatHours(v), fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}>
-                  {appUsageList.map((entry, index) => {
-                    const palette = ['#0d9488', '#0284c7', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#ca8a04', '#059669', '#2563eb', '#9333ea', '#e11d48', '#d97706'];
-                    const color = palette[index % palette.length];
-                    return <Cell key={`cell-${index}`} fill={color} />;
-                  })}
+                <Bar dataKey="hours" radius={[8, 8, 0, 0]}>
+                  {uptimeColumnData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                  <LabelList
+                    dataKey="hours"
+                    position="top"
+                    formatter={(v) => formatHours(v)}
+                    style={{ fontSize: '11px', fontWeight: 'bold', fill: '#475569' }}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Usage Category Analysis: Active Apps vs Idle Time */}
-        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative lg:col-span-2">
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Device UpTime Allocation (Active vs Idle)</h3>
-          <div className="flex flex-col md:flex-row h-[300px] gap-6">
-            <div className="flex-1">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Educational Apps', value: kpi.totalEduHours, fill: COLORS.educational[0] },
-                      { name: '⭐ J-Guruji', value: kpi.totalJgurujiHours, fill: COLORS.jguruji },
-                      { name: 'Non-Educational Apps', value: kpi.totalNonEduHours, fill: COLORS.nonEducational[0] },
-                      { name: 'Idle / Unused UpTime', value: kpi.totalIdleHours, fill: COLORS.system[0] }
-                    ]}
-                    cx="50%" cy="50%" outerRadius={95} dataKey="value"
-                    labelLine={false}
-                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                      if (!percent || percent < 0.03) return null;
-                      const RADIAN = Math.PI / 180;
-                      const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
-                      const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                      const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                      return (
-                        <text
-                          x={x}
-                          y={y}
-                          fill="#ffffff"
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          style={{ fontSize: '11px', fontWeight: '900', pointerEvents: 'none', filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.8))' }}
-                        >
-                          {`${(percent * 100).toFixed(1)}%`}
-                        </text>
-                      );
-                    }}
-                  >
-                    <Cell fill={COLORS.educational[0]} />
-                    <Cell fill={COLORS.jguruji} />
-                    <Cell fill={COLORS.nonEducational[0]} />
-                    <Cell fill={COLORS.system[0]} />
-                  </Pie>
-                  <Tooltip content={<PremiumChartTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex-1 flex flex-col justify-center space-y-4 text-xs font-semibold">
-              <div>
-                <div className="flex justify-between text-slate-700 dark:text-slate-300 mb-1">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-600"></span>⭐ J-Guruji Usage</span>
-                  <span className="font-extrabold text-sky-600">{kpi.overallJgurujiPerc.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-sky-600 h-full" style={{ width: `${Math.min(100, kpi.overallJgurujiPerc)}%` }}></div>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-0.5">{formatHours(kpi.totalJgurujiHours)} of Active App Usage</p>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-slate-700 dark:text-slate-300 mb-1">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>Other Educational Apps</span>
-                  <span className="font-extrabold text-emerald-600">{kpi.overallEduPerc.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-emerald-600 h-full" style={{ width: `${Math.min(100, kpi.overallEduPerc)}%` }}></div>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-0.5">{formatHours(kpi.totalEduHours)}</p>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-slate-700 dark:text-slate-300 mb-1">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span>Non-Educational Apps</span>
-                  <span className="font-extrabold text-rose-600">{kpi.overallNonEduPerc.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-rose-600 h-full" style={{ width: `${Math.min(100, kpi.overallNonEduPerc)}%` }}></div>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-0.5">{formatHours(kpi.totalNonEduHours)}</p>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-slate-700 dark:text-slate-300 mb-1">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-500"></span>Idle / Unused UpTime</span>
-                  <span className="font-extrabold text-slate-500">{kpi.overallIdlePerc.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-slate-500 h-full" style={{ width: `${Math.min(100, kpi.overallIdlePerc)}%` }}></div>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-0.5">{formatHours(kpi.totalIdleHours)} of Total UpTime</p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* AI Insights & Operational Alerts Panel (CLICKABLE FOR DRILL-DOWN) */}
@@ -860,7 +915,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
           </div>
         </div>
 
-        {/* TAB 1: SCHOOL-LEVEL TABLE (INCLUDES PROJECT, CC/DEF & ICT INSTRUCTOR) */}
+        {/* TAB 1: SCHOOL-LEVEL TABLE */}
         {activeTab === 'school' && (
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
@@ -967,7 +1022,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
           </div>
         )}
 
-        {/* TAB 2: DEVICE-WISE DETAILED TABLE (INCLUDES PROJECT, CC/DEF & ICT INSTRUCTOR) */}
+        {/* TAB 2: DEVICE-WISE DETAILED TABLE */}
         {activeTab === 'device' && (
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
