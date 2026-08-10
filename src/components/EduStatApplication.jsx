@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
-  AreaChart, Area, CartesianGrid, XAxis, YAxis,
-  Tooltip, Legend
+  CartesianGrid, XAxis, YAxis, Tooltip
 } from 'recharts';
 import { downloadSVG, downloadPNG, downloadCSV } from '../utils';
 
@@ -106,7 +105,7 @@ const PlayIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor
 const PauseIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const StarIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>;
 
-const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
+const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], ccNameMapping = {} }) => {
   const [activeTab, setActiveTab] = useState('school'); // 'school' | 'device'
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'upTimeHours', direction: 'desc' });
@@ -119,6 +118,41 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
   const [deviceRowsPerPage, setDeviceRowsPerPage] = useState(10);
   const [deviceCurrentPage, setDeviceCurrentPage] = useState(1);
 
+  // Drill-down Modal State
+  const [drillModal, setDrillModal] = useState(null); // { filterType: 'all' | 'zero', searchTerm: '' }
+
+  // 1. Build Master Lookups for Project, CC/DEF, ICT Instructor
+  const schoolLookup = useMemo(() => {
+    const map = {};
+    (schools || []).forEach(s => {
+      const u = String(s.udise_code || s.udise || '').trim();
+      if (u) {
+        const rawCC = s.visitor_name || s.cc_name || s.def_name || s.ccName || '-';
+        const resolvedCC = (ccNameMapping && ccNameMapping[rawCC]) || rawCC;
+        map[u] = {
+          projectName: s.project_name || s.project || '-',
+          ccDef: resolvedCC,
+          rawCC: rawCC
+        };
+      }
+    });
+    return map;
+  }, [schools, ccNameMapping]);
+
+  const manpowerLookup = useMemo(() => {
+    const map = {};
+    (manpower || []).forEach(m => {
+      const u = String(m.udise || m.udise_code || '').trim();
+      const instName = m.instructorName || m.name || m.staffName || m.instructor || '';
+      if (u && instName) {
+        if (!map[u]) map[u] = [];
+        if (!map[u].includes(instName)) map[u].push(instName);
+      }
+    });
+    return map;
+  }, [manpower]);
+
+  // 2. Process EduStat Records
   const processedData = useMemo(() => {
     if (!edustatAppData || edustatAppData.length === 0) return null;
 
@@ -194,12 +228,18 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
 
       // School Stats
       if (record.udise && record.schoolName) {
+        const schMeta = schoolLookup[record.udise] || {};
+        const instList = manpowerLookup[record.udise] || [];
+
         if (!schoolStats[record.udise]) {
           schoolStats[record.udise] = {
             udise: record.udise,
             schoolName: record.schoolName,
             district: record.district || '-',
             block: record.block || '-',
+            projectName: schMeta.projectName || record.project || '-',
+            ccDef: schMeta.ccDef || record.visitor_name || '-',
+            ictInstructor: instList.length > 0 ? instList.join(', ') : '-',
             devices: new Set(),
             upTimeHours: 0,
             activeAppHours: 0,
@@ -226,6 +266,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
       // Device Stats
       if (record.serial) {
         const devKey = record.serial;
+        const schMeta = schoolLookup[record.udise] || {};
+        const instList = manpowerLookup[record.udise] || [];
+
         if (!deviceStats[devKey]) {
           deviceStats[devKey] = {
             serial: devKey,
@@ -233,6 +276,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
             udise: record.udise || '-',
             district: record.district || '-',
             block: record.block || '-',
+            projectName: schMeta.projectName || record.project || '-',
+            ccDef: schMeta.ccDef || record.visitor_name || '-',
+            ictInstructor: instList.length > 0 ? instList.join(', ') : '-',
             upTimeHours: 0,
             activeAppHours: 0,
             jgurujiHours: 0,
@@ -320,10 +366,21 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
       };
     });
 
-    // AI Insights Generator
+    // AI Insights Generator & District Leader Project Mapping
     const zeroJgurujiSchoolsCount = schoolTableData.filter(s => s.jgurujiHours === 0).length;
     const idleHeavySchoolsCount = schoolTableData.filter(s => s.idleHours > s.activeAppHours).length;
     const bestDistrict = districtList.length > 0 ? [...districtList].sort((a, b) => (b.jguruji / (b.activeApp || 1)) - (a.jguruji / (a.activeApp || 1)))[0] : null;
+
+    let bestDistrictProjects = '';
+    if (bestDistrict) {
+      const projSet = new Set();
+      schoolTableData.forEach(s => {
+        if (s.district.toLowerCase() === bestDistrict.district.toLowerCase() && s.projectName && s.projectName !== '-') {
+          projSet.add(s.projectName);
+        }
+      });
+      bestDistrictProjects = Array.from(projSet).join(', ') || '-';
+    }
 
     return {
       kpi: {
@@ -344,7 +401,8 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
         dateRange: minDate !== '9999-12-31' ? `${minDate} to ${maxDate}` : 'N/A',
         zeroJgurujiSchoolsCount,
         idleHeavySchoolsCount,
-        bestDistrict
+        bestDistrict,
+        bestDistrictProjects
       },
       appUsageList,
       dailyTrendList,
@@ -354,7 +412,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
       topApps: appUsageList.slice(0, 10)
     };
 
-  }, [edustatAppData]);
+  }, [edustatAppData, schoolLookup, manpowerLookup]);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -377,7 +435,11 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
       items = items.filter(s =>
         s.schoolName.toLowerCase().includes(term) ||
         s.udise.includes(term) ||
-        s.district.toLowerCase().includes(term)
+        s.district.toLowerCase().includes(term) ||
+        s.block.toLowerCase().includes(term) ||
+        s.projectName.toLowerCase().includes(term) ||
+        s.ccDef.toLowerCase().includes(term) ||
+        s.ictInstructor.toLowerCase().includes(term)
       );
     }
 
@@ -409,7 +471,11 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
         d.serial.toLowerCase().includes(term) ||
         d.schoolName.toLowerCase().includes(term) ||
         d.udise.includes(term) ||
-        d.district.toLowerCase().includes(term)
+        d.district.toLowerCase().includes(term) ||
+        d.block.toLowerCase().includes(term) ||
+        d.projectName.toLowerCase().includes(term) ||
+        d.ccDef.toLowerCase().includes(term) ||
+        d.ictInstructor.toLowerCase().includes(term)
       );
     }
 
@@ -431,6 +497,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
     return sortedAndFilteredDevices.slice(start, start + deviceRowsPerPage);
   }, [sortedAndFilteredDevices, deviceCurrentPage, deviceRowsPerPage]);
 
+  // Export School Report (Includes Project Name, CC/DEF Details, ICT Instructor)
   const exportSchoolData = () => {
     if (!processedData) return;
     const exportRows = processedData.schoolTableData.map(s => ({
@@ -438,6 +505,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
       'UDISE': s.udise,
       'District': s.district,
       'Block': s.block,
+      'Project Name': s.projectName,
+      'CC / DEF Details': s.ccDef,
+      'Name of ICT Instructor': s.ictInstructor,
       'Devices Count': s.deviceCount,
       'Total UpTime (Hr)': s.upTimeHours.toFixed(2),
       'Active App Usage (Hr)': s.activeAppHours.toFixed(2),
@@ -452,6 +522,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
     downloadCSV(exportRows, `Edustat_School_Level_Report.csv`);
   };
 
+  // Export Device-Wise Report (Includes Project Name, CC/DEF Details, ICT Instructor)
   const exportDeviceData = () => {
     if (!processedData) return;
     const exportRows = processedData.deviceTableData.map(d => ({
@@ -460,6 +531,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
       'UDISE': d.udise,
       'District': d.district,
       'Block': d.block,
+      'Project Name': d.projectName,
+      'CC / DEF Details': d.ccDef,
+      'Name of ICT Instructor': d.ictInstructor,
       'UpTime (Hr)': d.upTimeHours.toFixed(2),
       'Active App Usage (Hr)': d.activeAppHours.toFixed(2),
       'Idle Unused Time (Hr)': d.idleHours.toFixed(2),
@@ -470,6 +544,25 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
       'Usage Tag': d.statusTag
     }));
     downloadCSV(exportRows, `Edustat_Device_Wise_Report.csv`);
+  };
+
+  // Export Drill-Down Data from Modal
+  const exportDrillDownData = (type, rows) => {
+    const exportRows = rows.map(s => ({
+      'School Name': s.schoolName,
+      'UDISE': s.udise,
+      'District': s.district,
+      'Block': s.block,
+      'Project Name': s.projectName,
+      'CC / DEF Details': s.ccDef,
+      'Name of ICT Instructor': s.ictInstructor,
+      'Total UpTime (Hr)': s.upTimeHours.toFixed(2),
+      'Active App Usage (Hr)': s.activeAppHours.toFixed(2),
+      'J-Guruji Hours': s.jgurujiHours.toFixed(2),
+      'J-Guruji %': s.jgurujiPerc.toFixed(1) + '%',
+      'Top App': s.topAppName
+    }));
+    downloadCSV(exportRows, `JGuruji_DrillDown_${type}_Report.csv`);
   };
 
   if (!edustatAppData || edustatAppData.length === 0 || !processedData) {
@@ -486,7 +579,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
     );
   }
 
-  const { kpi, appUsageList, dailyTrendList, districtList } = processedData;
+  const { kpi, appUsageList, schoolTableData } = processedData;
 
   const kpiCards = [
     { title: "Total Devices", value: kpi.devices, icon: <MonitorIcon />, color: "from-blue-500 to-blue-600" },
@@ -496,6 +589,25 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
     { title: "Idle / Unused Hours", value: `${formatHours(kpi.totalIdleHours)} (${kpi.overallIdlePerc.toFixed(1)}%)`, icon: <PauseIcon />, color: "from-amber-500 to-amber-600" },
     { title: "⭐ J-Guruji Adoption", value: `${formatHours(kpi.totalJgurujiHours)} (${kpi.overallJgurujiPerc.toFixed(1)}%)`, icon: <StarIcon />, color: "from-sky-500 to-sky-600" }
   ];
+
+  // Drill-down Modal Data filtering
+  let modalFilteredList = [];
+  if (drillModal) {
+    let raw = drillModal.filterType === 'zero' ? schoolTableData.filter(s => s.jgurujiHours === 0) : schoolTableData;
+    if (drillModal.searchTerm) {
+      const q = drillModal.searchTerm.toLowerCase();
+      raw = raw.filter(s =>
+        s.schoolName.toLowerCase().includes(q) ||
+        s.udise.includes(q) ||
+        s.district.toLowerCase().includes(q) ||
+        s.block.toLowerCase().includes(q) ||
+        s.projectName.toLowerCase().includes(q) ||
+        s.ccDef.toLowerCase().includes(q) ||
+        s.ictInstructor.toLowerCase().includes(q)
+      );
+    }
+    modalFilteredList = raw;
+  }
 
   return (
     <div className="space-y-6">
@@ -546,7 +658,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
           </div>
         </div>
 
-        {/* Usage Category Analysis: Active Apps vs Idle Time (PieChart with Data Labels) */}
+        {/* Usage Category Analysis: Active Apps vs Idle Time */}
         <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative lg:col-span-2">
           <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Device UpTime Allocation (Active vs Idle)</h3>
           <div className="flex flex-col md:flex-row h-[300px] gap-6">
@@ -640,23 +752,40 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
         </div>
       </div>
 
-      {/* AI Insights & Alerts Panel (High Contrast Dark Theme) */}
+      {/* AI Insights & Operational Alerts Panel (CLICKABLE FOR DRILL-DOWN) */}
       <div className="bg-slate-900 border border-slate-800 text-white rounded-xl p-5 shadow-xl">
-        <h3 className="text-sm font-extrabold mb-3 uppercase tracking-wider flex items-center gap-2 text-teal-400">
-          <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-          Smart AI Analytics & Operational Alerts
+        <h3 className="text-sm font-extrabold mb-3 uppercase tracking-wider flex items-center justify-between text-teal-400">
+          <span className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            Smart AI Analytics & Operational Alerts
+          </span>
+          <span className="text-[10px] font-normal text-slate-400 lowercase">Click cards to drill-down details & export 🔍</span>
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="bg-slate-800/90 border border-slate-700/80 rounded-lg p-3.5 shadow-sm">
-            <span className="text-sky-400 font-extrabold uppercase text-[10px] tracking-wider block mb-1.5 flex items-center gap-1">
-              <span>⭐ J-GURUJI ADOPTION SCORE</span>
-            </span>
+          
+          {/* Card 1: J-Guruji Adoption Score (CLICKABLE DRILL DOWN) */}
+          <div 
+            onClick={() => setDrillModal({ filterType: 'zero', searchTerm: '' })}
+            className="bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-sky-500 rounded-lg p-3.5 shadow-sm cursor-pointer transition-all group relative"
+            title="Click to view & export drill-down data of zero J-Guruji schools"
+          >
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-sky-400 font-extrabold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                <span>⭐ J-GURUJI ADOPTION SCORE</span>
+              </span>
+              <span className="text-[10px] font-bold text-sky-400 opacity-0 group-hover:opacity-100 transition-opacity">Drill Down 🔍</span>
+            </div>
             <p className="leading-relaxed text-slate-200 font-medium">
               J-Guruji accounts for <strong className="text-sky-300 font-black bg-slate-900/80 px-1.5 py-0.5 rounded">{kpi.overallJgurujiPerc.toFixed(1)}%</strong> of active app usage across <strong className="text-white font-bold">{kpi.schools}</strong> schools. 
-              {kpi.zeroJgurujiSchoolsCount > 0 ? <span className="text-amber-300 font-bold block mt-1"> ⚠️ {kpi.zeroJgurujiSchoolsCount} schools have zero J-Guruji activity.</span> : <span className="text-emerald-300 font-bold block mt-1"> Great adoption rate!</span>}
+              {kpi.zeroJgurujiSchoolsCount > 0 ? (
+                <span className="text-amber-300 font-bold block mt-1.5 bg-amber-950/60 border border-amber-800/50 p-1.5 rounded text-[11px]">
+                  ⚠️ {kpi.zeroJgurujiSchoolsCount} schools have zero J-Guruji activity. <span className="underline font-extrabold ml-1">View List & Export →</span>
+                </span>
+              ) : <span className="text-emerald-300 font-bold block mt-1"> Great adoption rate!</span>}
             </p>
           </div>
 
+          {/* Card 2: Idle Power Waste Warning */}
           <div className="bg-slate-800/90 border border-slate-700/80 rounded-lg p-3.5 shadow-sm">
             <span className="text-amber-400 font-extrabold uppercase text-[10px] tracking-wider block mb-1.5 flex items-center gap-1">
               <span>💤 IDLE POWER WASTE WARNING</span>
@@ -667,13 +796,19 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
             </p>
           </div>
 
+          {/* Card 3: District & Project Leader (MENTIONS DISTRICT & PROJECT NAME) */}
           <div className="bg-slate-800/90 border border-slate-700/80 rounded-lg p-3.5 shadow-sm">
             <span className="text-emerald-400 font-extrabold uppercase text-[10px] tracking-wider block mb-1.5 flex items-center gap-1">
-              <span>🏆 DISTRICT LEADER</span>
+              <span>🏆 DISTRICT & PROJECT LEADER</span>
             </span>
             <p className="leading-relaxed text-slate-200 font-medium">
               {kpi.bestDistrict ? (
-                <>District <strong className="text-emerald-300 font-black bg-slate-900/80 px-1.5 py-0.5 rounded">{kpi.bestDistrict.district}</strong> leads in J-Guruji adoption with <strong className="text-white">{formatHours(kpi.bestDistrict.jguruji)}</strong> usage.</>
+                <>
+                  District <strong className="text-emerald-300 font-black bg-slate-900/80 px-1.5 py-0.5 rounded">{kpi.bestDistrict.district}</strong>
+                  {kpi.bestDistrictProjects && kpi.bestDistrictProjects !== '-' && (
+                    <span className="text-teal-300 font-bold ml-1">({kpi.bestDistrictProjects})</span>
+                  )} leads in J-Guruji adoption with <strong className="text-white font-bold">{formatHours(kpi.bestDistrict.jguruji)}</strong> usage.
+                </>
               ) : 'Active data loaded.'}
             </p>
           </div>
@@ -725,20 +860,20 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
           </div>
         </div>
 
-        {/* TAB 1: SCHOOL-LEVEL TABLE */}
+        {/* TAB 1: SCHOOL-LEVEL TABLE (INCLUDES PROJECT, CC/DEF & ICT INSTRUCTOR) */}
         {activeTab === 'school' && (
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
               <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                School Usage & Efficiency Breakdown
+                School Usage & Efficiency Breakdown ({sortedAndFilteredSchools.length} schools)
               </h4>
               <div className="flex items-center gap-3 w-full sm:w-auto">
                 <input
                   type="text"
-                  placeholder="Search school, UDISE or district..."
+                  placeholder="Search school, UDISE, project, CC, instructor..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 w-full sm:w-64 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 w-full sm:w-72 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
                 <select
                   value={rowsPerPage}
@@ -762,13 +897,15 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
                   <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700">
                     <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('schoolName')}>School Name</th>
                     <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('udise')}>UDISE</th>
-                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('district')}>District</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('district')}>District / Block</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-400" onClick={() => handleSort('projectName')}>Project Name</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-700 dark:text-sky-400" onClick={() => handleSort('ccDef')}>CC / DEF Details</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-400" onClick={() => handleSort('ictInstructor')}>ICT Instructor</th>
                     <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('deviceCount')}>Devices</th>
                     <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('upTimeHours')}>UpTime (Hr)</th>
                     <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-400" onClick={() => handleSort('activeAppHours')}>Active App (Hr)</th>
-                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-400" onClick={() => handleSort('idleHours')}>Idle / Unused (Hr)</th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-400" onClick={() => handleSort('idleHours')}>Idle (Hr)</th>
                     <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('activeUtilPerc')}>Util %</th>
-                    <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('eduPerc')}>Edu %</th>
                     <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-700 dark:text-sky-400" onClick={() => handleSort('jgurujiPerc')}>⭐ J-Guruji %</th>
                     <th className="p-3">Top App</th>
                   </tr>
@@ -776,38 +913,28 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                   {paginatedSchools.map((school, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="p-3 font-semibold text-slate-800 dark:text-slate-100 max-w-[200px] truncate" title={school.schoolName}>{school.schoolName}</td>
+                      <td className="p-3 font-semibold text-slate-800 dark:text-slate-100 max-w-[180px] truncate" title={school.schoolName}>{school.schoolName}</td>
                       <td className="p-3 font-mono">{school.udise}</td>
-                      <td className="p-3">{school.district}</td>
+                      <td className="p-3">{school.district} / {school.block}</td>
+                      <td className="p-3 font-medium text-teal-600 dark:text-teal-400 max-w-[120px] truncate" title={school.projectName}>{school.projectName}</td>
+                      <td className="p-3 font-medium text-sky-600 dark:text-sky-400 max-w-[130px] truncate" title={school.ccDef}>{school.ccDef}</td>
+                      <td className="p-3 font-medium text-indigo-600 dark:text-indigo-400 max-w-[140px] truncate" title={school.ictInstructor}>{school.ictInstructor}</td>
                       <td className="p-3 text-center font-bold">{school.deviceCount}</td>
                       <td className="p-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatHours(school.upTimeHours)}</td>
                       <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatHours(school.activeAppHours)}</td>
                       <td className="p-3 text-right font-mono font-bold text-amber-600 dark:text-amber-400">{formatHours(school.idleHours)}</td>
-                      <td className="p-3 text-center">
-                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                          {school.activeUtilPerc.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          school.eduPerc >= 70 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' :
-                          school.eduPerc >= 40 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' :
-                          'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
-                        }`}>
-                          {school.eduPerc.toFixed(1)}%
-                        </span>
-                      </td>
+                      <td className="p-3 text-center font-bold">{school.activeUtilPerc.toFixed(1)}%</td>
                       <td className="p-3 text-center">
                         <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300">
                           {school.jgurujiPerc.toFixed(1)}%
                         </span>
                       </td>
-                      <td className="p-3 font-medium max-w-[120px] truncate" title={school.topAppName}>{school.topAppName}</td>
+                      <td className="p-3 font-medium max-w-[100px] truncate" title={school.topAppName}>{school.topAppName}</td>
                     </tr>
                   ))}
                   {paginatedSchools.length === 0 && (
                     <tr>
-                      <td colSpan="11" className="p-6 text-center text-slate-500">No schools found matching the filter criteria.</td>
+                      <td colSpan="13" className="p-6 text-center text-slate-500">No schools found matching the filter criteria.</td>
                     </tr>
                   )}
                 </tbody>
@@ -840,7 +967,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
           </div>
         )}
 
-        {/* TAB 2: DEVICE-WISE DETAILED TABLE */}
+        {/* TAB 2: DEVICE-WISE DETAILED TABLE (INCLUDES PROJECT, CC/DEF & ICT INSTRUCTOR) */}
         {activeTab === 'device' && (
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
@@ -850,10 +977,10 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
               <div className="flex items-center gap-3 w-full sm:w-auto">
                 <input
                   type="text"
-                  placeholder="Search device serial, school or district..."
+                  placeholder="Search device serial, school, project, CC, instructor..."
                   value={deviceSearchTerm}
                   onChange={(e) => setDeviceSearchTerm(e.target.value)}
-                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 w-full sm:w-64 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 w-full sm:w-72 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
                 <select
                   value={deviceRowsPerPage}
@@ -878,6 +1005,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
                     <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('serial')}>Device Serial</th>
                     <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('schoolName')}>School Name</th>
                     <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('district')}>District / Block</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-400" onClick={() => handleDeviceSort('projectName')}>Project Name</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-700 dark:text-sky-400" onClick={() => handleDeviceSort('ccDef')}>CC / DEF Details</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-400" onClick={() => handleDeviceSort('ictInstructor')}>ICT Instructor</th>
                     <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('upTimeHours')}>UpTime (Hr)</th>
                     <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-400" onClick={() => handleDeviceSort('activeAppHours')}>Active App (Hr)</th>
                     <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-400" onClick={() => handleDeviceSort('idleHours')}>Idle (Hr)</th>
@@ -891,14 +1021,17 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
                   {paginatedDevices.map((dev, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="p-3 font-mono font-bold text-slate-800 dark:text-slate-100">{dev.serial}</td>
-                      <td className="p-3 font-medium max-w-[200px] truncate" title={dev.schoolName}>{dev.schoolName}</td>
+                      <td className="p-3 font-medium max-w-[180px] truncate" title={dev.schoolName}>{dev.schoolName}</td>
                       <td className="p-3">{dev.district} / {dev.block}</td>
+                      <td className="p-3 font-medium text-teal-600 dark:text-teal-400 max-w-[120px] truncate" title={dev.projectName}>{dev.projectName}</td>
+                      <td className="p-3 font-medium text-sky-600 dark:text-sky-400 max-w-[130px] truncate" title={dev.ccDef}>{dev.ccDef}</td>
+                      <td className="p-3 font-medium text-indigo-600 dark:text-indigo-400 max-w-[140px] truncate" title={dev.ictInstructor}>{dev.ictInstructor}</td>
                       <td className="p-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatHours(dev.upTimeHours)}</td>
                       <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatHours(dev.activeAppHours)}</td>
                       <td className="p-3 text-right font-mono font-bold text-amber-600 dark:text-amber-400">{formatHours(dev.idleHours)}</td>
                       <td className="p-3 text-center font-bold">{dev.activeUtilPerc.toFixed(1)}%</td>
                       <td className="p-3 text-right font-mono font-bold text-sky-600 dark:text-sky-400">{formatHours(dev.jgurujiHours)}</td>
-                      <td className="p-3 font-medium max-w-[120px] truncate" title={dev.topAppName}>{dev.topAppName}</td>
+                      <td className="p-3 font-medium max-w-[100px] truncate" title={dev.topAppName}>{dev.topAppName}</td>
                       <td className="p-3 text-center">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
                           dev.statusTag === 'High Edu' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
@@ -912,7 +1045,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
                   ))}
                   {paginatedDevices.length === 0 && (
                     <tr>
-                      <td colSpan="10" className="p-6 text-center text-slate-500">No devices found matching the filter criteria.</td>
+                      <td colSpan="13" className="p-6 text-center text-slate-500">No devices found matching the filter criteria.</td>
                     </tr>
                   )}
                 </tbody>
@@ -945,6 +1078,135 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
           </div>
         )}
       </div>
+
+      {/* DRILL-DOWN MODAL DIALOG */}
+      {drillModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⭐</span>
+                <div>
+                  <h3 className="font-extrabold text-sm text-teal-400 uppercase tracking-wider">
+                    J-Guruji Adoption Drill-Down Report
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {drillModal.filterType === 'zero' ? `Showing ${modalFilteredList.length} schools with zero J-Guruji activity` : `Showing all ${modalFilteredList.length} schools`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => exportDrillDownData(drillModal.filterType, modalFilteredList)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition"
+                >
+                  📥 Export Drill-Down Data (Excel/CSV)
+                </button>
+                <button
+                  onClick={() => setDrillModal(null)}
+                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Controls */}
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDrillModal({ ...drillModal, filterType: 'zero' })}
+                  className={`px-3 py-1.5 text-xs font-extrabold rounded-lg transition ${
+                    drillModal.filterType === 'zero'
+                      ? 'bg-amber-600 text-white shadow'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  ⚠️ Zero J-Guruji Schools ({processedData.schoolTableData.filter(s => s.jgurujiHours === 0).length})
+                </button>
+                <button
+                  onClick={() => setDrillModal({ ...drillModal, filterType: 'all' })}
+                  className={`px-3 py-1.5 text-xs font-extrabold rounded-lg transition ${
+                    drillModal.filterType === 'all'
+                      ? 'bg-sky-600 text-white shadow'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  🏫 All Schools ({processedData.schoolTableData.length})
+                </button>
+              </div>
+
+              <input
+                type="text"
+                placeholder="Search school, UDISE, project, CC, instructor..."
+                value={drillModal.searchTerm}
+                onChange={(e) => setDrillModal({ ...drillModal, searchTerm: e.target.value })}
+                className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 w-full sm:w-72 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+
+            {/* Modal Table */}
+            <div className="p-4 overflow-y-auto flex-1">
+              <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <th className="p-2.5">School Name</th>
+                    <th className="p-2.5">UDISE</th>
+                    <th className="p-2.5">District / Block</th>
+                    <th className="p-2.5 text-teal-700 dark:text-teal-400">Project Name</th>
+                    <th className="p-2.5 text-sky-700 dark:text-sky-400">CC / DEF Details</th>
+                    <th className="p-2.5 text-indigo-700 dark:text-indigo-400">ICT Instructor</th>
+                    <th className="p-2.5 text-right">UpTime (Hr)</th>
+                    <th className="p-2.5 text-right text-emerald-700 dark:text-emerald-400">Active App (Hr)</th>
+                    <th className="p-2.5 text-right text-sky-700 dark:text-sky-400">J-Guruji (Hr)</th>
+                    <th className="p-2.5 text-center">J-Guruji %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {modalFilteredList.map((school, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="p-2.5 font-semibold text-slate-800 dark:text-slate-100 max-w-[180px] truncate" title={school.schoolName}>{school.schoolName}</td>
+                      <td className="p-2.5 font-mono">{school.udise}</td>
+                      <td className="p-2.5">{school.district} / {school.block}</td>
+                      <td className="p-2.5 font-medium text-teal-600 dark:text-teal-400">{school.projectName}</td>
+                      <td className="p-2.5 font-medium text-sky-600 dark:text-sky-400">{school.ccDef}</td>
+                      <td className="p-2.5 font-medium text-indigo-600 dark:text-indigo-400">{school.ictInstructor}</td>
+                      <td className="p-2.5 text-right font-mono font-bold">{formatHours(school.upTimeHours)}</td>
+                      <td className="p-2.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatHours(school.activeAppHours)}</td>
+                      <td className="p-2.5 text-right font-mono font-bold text-sky-600 dark:text-sky-400">{formatHours(school.jgurujiHours)}</td>
+                      <td className="p-2.5 text-center font-extrabold">
+                        <span className={`px-2 py-0.5 rounded ${school.jgurujiHours === 0 ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' : 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300'}`}>
+                          {school.jgurujiPerc.toFixed(1)}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {modalFilteredList.length === 0 && (
+                    <tr>
+                      <td colSpan="10" className="p-8 text-center text-slate-500">No schools found matching the filter criteria.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs text-slate-500">
+              <span>Showing {modalFilteredList.length} schools</span>
+              <button
+                onClick={() => setDrillModal(null)}
+                className="px-4 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-bold transition"
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
