@@ -24,11 +24,12 @@ const APP_CATEGORIES = {
 const COLORS = {
   educational: ['#047857', '#059669', '#10b981', '#34d399', '#6ee7b7'],
   nonEducational: ['#be123c', '#e11d48', '#f43f5e', '#fb7185', '#fda4af'],
-  system: ['#475569', '#64748b', '#94a3b8', '#cbd5e1']
+  system: ['#475569', '#64748b', '#94a3b8', '#cbd5e1'],
+  jguruji: '#0284c7'
 };
 
 const formatHours = (h) => {
-  if (h === undefined || h === null) return '0h 0m';
+  if (h === undefined || h === null || isNaN(h)) return '0h 0m';
   const hrs = Math.floor(h);
   const mins = Math.round((h - hrs) * 60);
   return `${hrs}h ${mins}m`;
@@ -37,10 +38,9 @@ const formatHours = (h) => {
 const getCategory = (appName) => {
   if (!appName) return 'system';
   const name = String(appName).trim().toLowerCase();
-  
+  if (name === 'uptime') return 'system';
   if (APP_CATEGORIES.educational.some(app => name === app || name.includes(app))) return 'educational';
   if (APP_CATEGORIES.nonEducational.some(app => name === app || name.includes(app))) return 'nonEducational';
-  if (APP_CATEGORIES.system.some(app => name === app || name.includes(app))) return 'system';
   return 'system';
 };
 
@@ -102,23 +102,33 @@ const PremiumChartTooltip = ({ active, payload, label }) => {
 const MonitorIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
 const SchoolIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>;
 const ClockIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-const BookIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>;
-const GamepadIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" /></svg>;
-const CalendarIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+const PlayIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+const PauseIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+const StarIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>;
 
 const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
+  const [activeTab, setActiveTab] = useState('school'); // 'school' | 'device'
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortConfig, setSortConfig] = useState({ key: 'totalHours', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'upTimeHours', direction: 'desc' });
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Device-level search and sorting
+  const [deviceSearchTerm, setDeviceSearchTerm] = useState('');
+  const [deviceSortConfig, setDeviceSortConfig] = useState({ key: 'upTimeHours', direction: 'desc' });
+  const [deviceRowsPerPage, setDeviceRowsPerPage] = useState(10);
+  const [deviceCurrentPage, setDeviceCurrentPage] = useState(1);
 
   const processedData = useMemo(() => {
     if (!edustatAppData || edustatAppData.length === 0) return null;
 
-    let totalHours = 0;
-    let eduHours = 0;
-    let nonEduHours = 0;
-    let sysHours = 0;
+    let totalUpTimeHours = 0;
+    let totalActiveAppHours = 0;
+    let totalJgurujiHours = 0;
+    let totalEduHours = 0;
+    let totalNonEduHours = 0;
+    let totalSysHours = 0;
+
     const devices = new Set();
     const udises = new Set();
     let minDate = '9999-12-31';
@@ -128,12 +138,16 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
     const dailyUsage = {};
     const districtUsage = {};
     const schoolStats = {};
+    const deviceStats = {};
 
     edustatAppData.forEach(record => {
       const h = parseFloat(record.hours) || 0;
       if (h <= 0) return;
 
-      totalHours += h;
+      const procName = String(record.processName || '').trim();
+      const isUpTime = procName.toLowerCase() === 'uptime';
+      const isJguruji = procName.toLowerCase() === 'jguruji';
+
       devices.add(record.serial);
       if (record.udise) udises.add(record.udise);
 
@@ -142,30 +156,43 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
         if (record.date > maxDate) maxDate = record.date;
       }
 
-      const cat = getCategory(record.processName);
-      if (cat === 'educational') eduHours += h;
-      else if (cat === 'nonEducational') nonEduHours += h;
-      else sysHours += h;
+      const cat = getCategory(procName);
 
-      // App Usage
-      const appKey = record.processName || 'Unknown';
-      if (!appUsage[appKey]) appUsage[appKey] = { name: appKey, hours: 0, category: cat };
-      appUsage[appKey].hours += h;
+      if (isUpTime) {
+        totalUpTimeHours += h;
+      } else {
+        totalActiveAppHours += h;
+        if (isJguruji) totalJgurujiHours += h;
+        if (cat === 'educational') totalEduHours += h;
+        else if (cat === 'nonEducational') totalNonEduHours += h;
+        else totalSysHours += h;
 
-      // Daily
+        // App Usage breakdown (excluding UpTime from App Breakdown chart)
+        const appKey = procName || 'Unknown';
+        if (!appUsage[appKey]) appUsage[appKey] = { name: appKey, hours: 0, category: cat };
+        appUsage[appKey].hours += h;
+      }
+
+      // Daily Usage Trend
       if (record.date) {
-        if (!dailyUsage[record.date]) dailyUsage[record.date] = { date: record.date, educational: 0, nonEducational: 0, system: 0 };
-        dailyUsage[record.date][cat] += h;
+        if (!dailyUsage[record.date]) dailyUsage[record.date] = { date: record.date, educational: 0, nonEducational: 0, system: 0, uptime: 0 };
+        if (isUpTime) dailyUsage[record.date].uptime += h;
+        else dailyUsage[record.date][cat] += h;
       }
 
-      // District
+      // District Usage
       if (record.district) {
-        if (!districtUsage[record.district]) districtUsage[record.district] = { district: record.district, educational: 0, nonEducational: 0, total: 0 };
-        districtUsage[record.district][cat] += h;
-        districtUsage[record.district].total += h;
+        if (!districtUsage[record.district]) districtUsage[record.district] = { district: record.district, educational: 0, nonEducational: 0, uptime: 0, activeApp: 0, jguruji: 0 };
+        if (isUpTime) {
+          districtUsage[record.district].uptime += h;
+        } else {
+          districtUsage[record.district][cat] += h;
+          districtUsage[record.district].activeApp += h;
+          if (isJguruji) districtUsage[record.district].jguruji += h;
+        }
       }
 
-      // School
+      // School Stats
       if (record.udise && record.schoolName) {
         if (!schoolStats[record.udise]) {
           schoolStats[record.udise] = {
@@ -174,54 +201,156 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
             district: record.district || '-',
             block: record.block || '-',
             devices: new Set(),
+            upTimeHours: 0,
+            activeAppHours: 0,
+            jgurujiHours: 0,
             eduHours: 0,
             nonEduHours: 0,
-            sysHours: 0,
-            totalHours: 0,
             appCounts: {}
           };
         }
         schoolStats[record.udise].devices.add(record.serial);
-        schoolStats[record.udise].totalHours += h;
-        schoolStats[record.udise][cat === 'educational' ? 'eduHours' : cat === 'nonEducational' ? 'nonEduHours' : 'sysHours'] += h;
-        
-        if (!schoolStats[record.udise].appCounts[appKey]) schoolStats[record.udise].appCounts[appKey] = 0;
-        schoolStats[record.udise].appCounts[appKey] += h;
+        if (isUpTime) {
+          schoolStats[record.udise].upTimeHours += h;
+        } else {
+          schoolStats[record.udise].activeAppHours += h;
+          if (isJguruji) schoolStats[record.udise].jgurujiHours += h;
+          if (cat === 'educational') schoolStats[record.udise].eduHours += h;
+          else if (cat === 'nonEducational') schoolStats[record.udise].nonEduHours += h;
+
+          if (!schoolStats[record.udise].appCounts[procName]) schoolStats[record.udise].appCounts[procName] = 0;
+          schoolStats[record.udise].appCounts[procName] += h;
+        }
+      }
+
+      // Device Stats
+      if (record.serial) {
+        const devKey = record.serial;
+        if (!deviceStats[devKey]) {
+          deviceStats[devKey] = {
+            serial: devKey,
+            schoolName: record.schoolName || '-',
+            udise: record.udise || '-',
+            district: record.district || '-',
+            block: record.block || '-',
+            upTimeHours: 0,
+            activeAppHours: 0,
+            jgurujiHours: 0,
+            eduHours: 0,
+            nonEduHours: 0,
+            appCounts: {}
+          };
+        }
+        if (isUpTime) {
+          deviceStats[devKey].upTimeHours += h;
+        } else {
+          deviceStats[devKey].activeAppHours += h;
+          if (isJguruji) deviceStats[devKey].jgurujiHours += h;
+          if (cat === 'educational') deviceStats[devKey].eduHours += h;
+          else if (cat === 'nonEducational') deviceStats[devKey].nonEduHours += h;
+
+          if (!deviceStats[devKey].appCounts[procName]) deviceStats[devKey].appCounts[procName] = 0;
+          deviceStats[devKey].appCounts[procName] += h;
+        }
       }
     });
+
+    const totalIdleHours = Math.max(0, totalUpTimeHours - totalActiveAppHours);
+    const overallActiveUtilPerc = totalUpTimeHours > 0 ? Math.min(100, (totalActiveAppHours / totalUpTimeHours) * 100) : 0;
+    const overallIdlePerc = totalUpTimeHours > 0 ? Math.min(100, (totalIdleHours / totalUpTimeHours) * 100) : 0;
+    const overallEduPerc = totalActiveAppHours > 0 ? (totalEduHours / totalActiveAppHours) * 100 : 0;
+    const overallNonEduPerc = totalActiveAppHours > 0 ? (totalNonEduHours / totalActiveAppHours) * 100 : 0;
+    const overallJgurujiPerc = totalActiveAppHours > 0 ? (totalJgurujiHours / totalActiveAppHours) * 100 : 0;
 
     const appUsageList = Object.values(appUsage)
       .sort((a, b) => b.hours - a.hours)
       .map((app, i) => {
-        let colorList = COLORS[app.category];
+        let colorList = COLORS[app.category] || COLORS.system;
         return { ...app, fill: colorList[i % colorList.length] };
       });
 
     const dailyTrendList = Object.values(dailyUsage).sort((a, b) => a.date.localeCompare(b.date));
-    const districtList = Object.values(districtUsage).sort((a, b) => b.total - a.total);
+    const districtList = Object.values(districtUsage).sort((a, b) => b.uptime - a.uptime);
 
+    // School Table Data
     const schoolTableData = Object.values(schoolStats).map(school => {
-      const eduPerc = school.totalHours > 0 ? (school.eduHours / school.totalHours) * 100 : 0;
-      const topApp = Object.entries(school.appCounts).sort((a, b) => b[1] - a[1])[0];
+      const idleHours = Math.max(0, school.upTimeHours - school.activeAppHours);
+      const activeUtilPerc = school.upTimeHours > 0 ? Math.min(100, (school.activeAppHours / school.upTimeHours) * 100) : 0;
+      const eduPerc = school.activeAppHours > 0 ? (school.eduHours / school.activeAppHours) * 100 : 0;
+      const nonEduPerc = school.activeAppHours > 0 ? (school.nonEduHours / school.activeAppHours) * 100 : 0;
+      const jgurujiPerc = school.activeAppHours > 0 ? (school.jgurujiHours / school.activeAppHours) * 100 : 0;
+      
+      const topAppEntries = Object.entries(school.appCounts).sort((a, b) => b[1] - a[1]);
+      const topApp = topAppEntries.length > 0 ? topAppEntries[0][0] : '-';
+
       return {
         ...school,
         deviceCount: school.devices.size,
+        idleHours,
+        activeUtilPerc,
         eduPerc,
-        topAppName: topApp ? topApp[0] : '-'
+        nonEduPerc,
+        jgurujiPerc,
+        topAppName: topApp
       };
     });
 
+    // Device Table Data
+    const deviceTableData = Object.values(deviceStats).map(dev => {
+      const idleHours = Math.max(0, dev.upTimeHours - dev.activeAppHours);
+      const activeUtilPerc = dev.upTimeHours > 0 ? Math.min(100, (dev.activeAppHours / dev.upTimeHours) * 100) : 0;
+      const eduPerc = dev.activeAppHours > 0 ? (dev.eduHours / dev.activeAppHours) * 100 : 0;
+      const jgurujiPerc = dev.activeAppHours > 0 ? (dev.jgurujiHours / dev.activeAppHours) * 100 : 0;
+
+      const topAppEntries = Object.entries(dev.appCounts).sort((a, b) => b[1] - a[1]);
+      const topApp = topAppEntries.length > 0 ? topAppEntries[0][0] : '-';
+
+      let statusTag = 'High Edu';
+      if (dev.nonEduHours > dev.eduHours) statusTag = 'Non-Edu Misuse';
+      else if (idleHours > dev.activeAppHours * 2) statusTag = 'Idle Heavy';
+
+      return {
+        ...dev,
+        idleHours,
+        activeUtilPerc,
+        eduPerc,
+        jgurujiPerc,
+        topAppName: topApp,
+        statusTag
+      };
+    });
+
+    // AI Insights Generator
+    const zeroJgurujiSchoolsCount = schoolTableData.filter(s => s.jgurujiHours === 0).length;
+    const idleHeavySchoolsCount = schoolTableData.filter(s => s.idleHours > s.activeAppHours).length;
+    const bestDistrict = districtList.length > 0 ? [...districtList].sort((a, b) => (b.jguruji / (b.activeApp || 1)) - (a.jguruji / (a.activeApp || 1)))[0] : null;
+
     return {
       kpi: {
-        totalHours, eduHours, nonEduHours, sysHours,
         devices: devices.size,
         schools: udises.size,
-        dateRange: minDate !== '9999-12-31' ? `${minDate} to ${maxDate}` : 'N/A'
+        totalUpTimeHours,
+        totalActiveAppHours,
+        totalIdleHours,
+        totalJgurujiHours,
+        totalEduHours,
+        totalNonEduHours,
+        totalSysHours,
+        overallActiveUtilPerc,
+        overallIdlePerc,
+        overallEduPerc,
+        overallNonEduPerc,
+        overallJgurujiPerc,
+        dateRange: minDate !== '9999-12-31' ? `${minDate} to ${maxDate}` : 'N/A',
+        zeroJgurujiSchoolsCount,
+        idleHeavySchoolsCount,
+        bestDistrict
       },
       appUsageList,
       dailyTrendList,
       districtList,
       schoolTableData,
+      deviceTableData,
       topApps: appUsageList.slice(0, 10)
     };
 
@@ -233,16 +362,22 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
     setSortConfig({ key, direction });
   };
 
+  const handleDeviceSort = (key) => {
+    let direction = 'asc';
+    if (deviceSortConfig.key === key && deviceSortConfig.direction === 'asc') direction = 'desc';
+    setDeviceSortConfig({ key, direction });
+  };
+
   const sortedAndFilteredSchools = useMemo(() => {
     if (!processedData) return [];
     let items = [...processedData.schoolTableData];
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      items = items.filter(s => 
-        (s.schoolName && s.schoolName.toLowerCase().includes(term)) ||
-        (s.udise && s.udise.toLowerCase().includes(term)) ||
-        (s.district && s.district.toLowerCase().includes(term))
+      items = items.filter(s =>
+        s.schoolName.toLowerCase().includes(term) ||
+        s.udise.includes(term) ||
+        s.district.toLowerCase().includes(term)
       );
     }
 
@@ -264,6 +399,79 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
     return sortedAndFilteredSchools.slice(start, start + rowsPerPage);
   }, [sortedAndFilteredSchools, currentPage, rowsPerPage]);
 
+  const sortedAndFilteredDevices = useMemo(() => {
+    if (!processedData) return [];
+    let items = [...processedData.deviceTableData];
+
+    if (deviceSearchTerm) {
+      const term = deviceSearchTerm.toLowerCase();
+      items = items.filter(d =>
+        d.serial.toLowerCase().includes(term) ||
+        d.schoolName.toLowerCase().includes(term) ||
+        d.udise.includes(term) ||
+        d.district.toLowerCase().includes(term)
+      );
+    }
+
+    if (deviceSortConfig.key) {
+      items.sort((a, b) => {
+        const aVal = a[deviceSortConfig.key];
+        const bVal = b[deviceSortConfig.key];
+        if (aVal < bVal) return deviceSortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return deviceSortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return items;
+  }, [processedData, deviceSearchTerm, deviceSortConfig]);
+
+  const paginatedDevices = useMemo(() => {
+    if (deviceRowsPerPage === 'All') return sortedAndFilteredDevices;
+    const start = (deviceCurrentPage - 1) * deviceRowsPerPage;
+    return sortedAndFilteredDevices.slice(start, start + deviceRowsPerPage);
+  }, [sortedAndFilteredDevices, deviceCurrentPage, deviceRowsPerPage]);
+
+  const exportSchoolData = () => {
+    if (!processedData) return;
+    const exportRows = processedData.schoolTableData.map(s => ({
+      'School Name': s.schoolName,
+      'UDISE': s.udise,
+      'District': s.district,
+      'Block': s.block,
+      'Devices Count': s.deviceCount,
+      'Total UpTime (Hr)': s.upTimeHours.toFixed(2),
+      'Active App Usage (Hr)': s.activeAppHours.toFixed(2),
+      'Idle Unused Time (Hr)': s.idleHours.toFixed(2),
+      'Active Util %': s.activeUtilPerc.toFixed(1) + '%',
+      'Educational %': s.eduPerc.toFixed(1) + '%',
+      'Non-Educational %': s.nonEduPerc.toFixed(1) + '%',
+      'J-Guruji Usage %': s.jgurujiPerc.toFixed(1) + '%',
+      'J-Guruji Hours': s.jgurujiHours.toFixed(2),
+      'Top App': s.topAppName
+    }));
+    downloadCSV(exportRows, `Edustat_School_Level_Report.csv`);
+  };
+
+  const exportDeviceData = () => {
+    if (!processedData) return;
+    const exportRows = processedData.deviceTableData.map(d => ({
+      'Serial Number': d.serial,
+      'School Name': d.schoolName,
+      'UDISE': d.udise,
+      'District': d.district,
+      'Block': d.block,
+      'UpTime (Hr)': d.upTimeHours.toFixed(2),
+      'Active App Usage (Hr)': d.activeAppHours.toFixed(2),
+      'Idle Unused Time (Hr)': d.idleHours.toFixed(2),
+      'Active Util %': d.activeUtilPerc.toFixed(1) + '%',
+      'J-Guruji Hours': d.jgurujiHours.toFixed(2),
+      'J-Guruji %': d.jgurujiPerc.toFixed(1) + '%',
+      'Top App': d.topAppName,
+      'Usage Tag': d.statusTag
+    }));
+    downloadCSV(exportRows, `Edustat_Device_Wise_Report.csv`);
+  };
+
   if (!edustatAppData || edustatAppData.length === 0 || !processedData) {
     return (
       <div className="portal-card p-10 flex flex-col items-center justify-center text-center h-[60vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
@@ -278,25 +486,21 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
     );
   }
 
-  const { kpi, appUsageList, dailyTrendList, districtList, topApps } = processedData;
-
-  const eduPerc = (kpi.eduHours / kpi.totalHours) * 100 || 0;
-  const nonEduPerc = (kpi.nonEduHours / kpi.totalHours) * 100 || 0;
-  const sysPerc = (kpi.sysHours / kpi.totalHours) * 100 || 0;
+  const { kpi, appUsageList, dailyTrendList, districtList } = processedData;
 
   const kpiCards = [
     { title: "Total Devices", value: kpi.devices, icon: <MonitorIcon />, color: "from-blue-500 to-blue-600" },
     { title: "Schools Covered", value: kpi.schools, icon: <SchoolIcon />, color: "from-purple-500 to-purple-600" },
-    { title: "Total Uptime", value: formatHours(kpi.totalHours), icon: <ClockIcon />, color: "from-slate-600 to-slate-700" },
-    { title: "Educational Usage", value: `${eduPerc.toFixed(1)}%`, icon: <BookIcon />, color: "from-emerald-500 to-emerald-600" },
-    { title: "Non-Educational", value: `${nonEduPerc.toFixed(1)}%`, icon: <GamepadIcon />, color: "from-rose-500 to-rose-600" },
-    { title: "Date Range", value: kpi.dateRange, icon: <CalendarIcon />, color: "from-teal-500 to-teal-600", textClass: "text-sm" }
+    { title: "Total Device UpTime", value: formatHours(kpi.totalUpTimeHours), icon: <ClockIcon />, color: "from-slate-600 to-slate-700" },
+    { title: "Active App Usage", value: `${formatHours(kpi.totalActiveAppHours)} (${kpi.overallActiveUtilPerc.toFixed(1)}%)`, icon: <PlayIcon />, color: "from-emerald-500 to-emerald-600" },
+    { title: "Idle / Unused Hours", value: `${formatHours(kpi.totalIdleHours)} (${kpi.overallIdlePerc.toFixed(1)}%)`, icon: <PauseIcon />, color: "from-amber-500 to-amber-600" },
+    { title: "⭐ J-Guruji Adoption", value: `${formatHours(kpi.totalJgurujiHours)} (${kpi.overallJgurujiPerc.toFixed(1)}%)`, icon: <StarIcon />, color: "from-sky-500 to-sky-600" }
   ];
 
   return (
     <div className="space-y-6">
       
-      {/* KPI Cards */}
+      {/* Top KPI Cards (6 Cards) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {kpiCards.map((card, idx) => (
           <div key={idx} className="portal-card relative overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow group">
@@ -305,16 +509,20 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
               {card.icon}
             </div>
             <p className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">{card.title}</p>
-            <p className={`font-bold text-slate-800 dark:text-white ${card.textClass || 'text-xl'}`}>{card.value}</p>
+            <p className="font-extrabold text-slate-800 dark:text-white text-base truncate">{card.value}</p>
           </div>
         ))}
       </div>
 
+      {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Application Usage Donut */}
+        {/* Application Breakdown Chart (Excludes UpTime process) */}
         <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative lg:col-span-1">
           <ChartToolbar chartId="app-donut-chart" csvData={appUsageList} filename="app-usage-breakdown" />
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Application Breakdown</h3>
+          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider flex items-center gap-2">
+            <span>Application Usage Breakdown</span>
+            <span className="text-[10px] text-slate-400 font-normal normal-case">(Active Apps)</span>
+          </h3>
           <div className="h-[300px]" id="app-donut-chart">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -322,8 +530,8 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
                   data={appUsageList}
                   cx="50%"
                   cy="50%"
-                  innerRadius={70}
-                  outerRadius={100}
+                  innerRadius={65}
+                  outerRadius={95}
                   paddingAngle={2}
                   dataKey="hours"
                 >
@@ -337,22 +545,24 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
           </div>
         </div>
 
-        {/* Edu vs NonEdu Comparison */}
+        {/* Usage Category Analysis: Active Apps vs Idle Time */}
         <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative lg:col-span-2">
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Usage Category Analysis</h3>
+          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Device UpTime Allocation (Active vs Idle)</h3>
           <div className="flex flex-col md:flex-row h-[300px] gap-6">
             <div className="flex-1">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={[
-                      { name: 'Educational', value: kpi.eduHours, fill: COLORS.educational[0] },
-                      { name: 'Non-Educational', value: kpi.nonEduHours, fill: COLORS.nonEducational[0] },
-                      { name: 'System/Other', value: kpi.sysHours, fill: COLORS.system[0] }
+                      { name: 'Educational Apps', value: kpi.totalEduHours, fill: COLORS.educational[0] },
+                      { name: '⭐ J-Guruji', value: kpi.totalJgurujiHours, fill: COLORS.jguruji },
+                      { name: 'Non-Educational Apps', value: kpi.totalNonEduHours, fill: COLORS.nonEducational[0] },
+                      { name: 'Idle / Unused UpTime', value: kpi.totalIdleHours, fill: COLORS.system[0] }
                     ]}
-                    cx="50%" cy="50%" outerRadius={100} dataKey="value"
+                    cx="50%" cy="50%" outerRadius={95} dataKey="value"
                   >
                     <Cell fill={COLORS.educational[0]} />
+                    <Cell fill={COLORS.jguruji} />
                     <Cell fill={COLORS.nonEducational[0]} />
                     <Cell fill={COLORS.system[0]} />
                   </Pie>
@@ -360,240 +570,351 @@ const EduStatApplication = ({ edustatAppData = [], schools = [] }) => {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex-1 flex flex-col justify-center space-y-6">
+            <div className="flex-1 flex flex-col justify-center space-y-4 text-xs font-semibold">
               <div>
-                <div className="flex justify-between mb-1">
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">Educational</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{eduPerc.toFixed(1)}%</span>
+                <div className="flex justify-between text-slate-700 dark:text-slate-300 mb-1">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-600"></span>⭐ J-Guruji Usage</span>
+                  <span className="font-extrabold text-sky-600">{kpi.overallJgurujiPerc.toFixed(1)}%</span>
                 </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3">
-                  <div className="bg-emerald-500 h-3 rounded-full" style={{ width: `${eduPerc}%` }}></div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-sky-600 h-full" style={{ width: `${Math.min(100, kpi.overallJgurujiPerc)}%` }}></div>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">{formatHours(kpi.eduHours)}</p>
-              </div>
-              
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="font-semibold text-rose-600 dark:text-rose-400">Non-Educational</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{nonEduPerc.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3">
-                  <div className="bg-rose-500 h-3 rounded-full" style={{ width: `${nonEduPerc}%` }}></div>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">{formatHours(kpi.nonEduHours)}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{formatHours(kpi.totalJgurujiHours)} of Active App Usage</p>
               </div>
 
               <div>
-                <div className="flex justify-between mb-1">
-                  <span className="font-semibold text-slate-600 dark:text-slate-400">System/Other</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{sysPerc.toFixed(1)}%</span>
+                <div className="flex justify-between text-slate-700 dark:text-slate-300 mb-1">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>Other Educational Apps</span>
+                  <span className="font-extrabold text-emerald-600">{kpi.overallEduPerc.toFixed(1)}%</span>
                 </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3">
-                  <div className="bg-slate-400 h-3 rounded-full" style={{ width: `${sysPerc}%` }}></div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-emerald-600 h-full" style={{ width: `${Math.min(100, kpi.overallEduPerc)}%` }}></div>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">{formatHours(kpi.sysHours)}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{formatHours(kpi.totalEduHours)}</p>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-slate-700 dark:text-slate-300 mb-1">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span>Non-Educational Apps</span>
+                  <span className="font-extrabold text-rose-600">{kpi.overallNonEduPerc.toFixed(1)}%</span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-rose-600 h-full" style={{ width: `${Math.min(100, kpi.overallNonEduPerc)}%` }}></div>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">{formatHours(kpi.totalNonEduHours)}</p>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-slate-700 dark:text-slate-300 mb-1">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-500"></span>Idle / Unused UpTime</span>
+                  <span className="font-extrabold text-slate-500">{kpi.overallIdlePerc.toFixed(1)}%</span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-slate-500 h-full" style={{ width: `${Math.min(100, kpi.overallIdlePerc)}%` }}></div>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">{formatHours(kpi.totalIdleHours)} of Total UpTime</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Daily Trend */}
-        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative">
-          <ChartToolbar chartId="daily-trend-chart" csvData={dailyTrendList} filename="daily-trend" />
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Daily Usage Trend</h3>
-          <div className="h-[300px]" id="daily-trend-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyTrendList} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorEdu" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={COLORS.educational[0]} stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor={COLORS.educational[0]} stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorNonEdu" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={COLORS.nonEducational[0]} stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor={COLORS.nonEducational[0]} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-                <XAxis dataKey="date" tick={{fontSize: 10}} tickMargin={10} stroke="#64748b" />
-                <YAxis tick={{fontSize: 10}} stroke="#64748b" tickFormatter={(v) => `${v}h`} />
-                <Tooltip content={<PremiumChartTooltip />} />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                <Area type="monotone" dataKey="educational" name="Educational" stroke={COLORS.educational[0]} fillOpacity={1} fill="url(#colorEdu)" />
-                <Area type="monotone" dataKey="nonEducational" name="Non-Educational" stroke={COLORS.nonEducational[0]} fillOpacity={1} fill="url(#colorNonEdu)" />
-              </AreaChart>
-            </ResponsiveContainer>
+      {/* AI Insights & Alerts Panel */}
+      <div className="portal-card bg-gradient-to-r from-teal-900/90 to-slate-900 text-white rounded-xl p-5 shadow-md">
+        <h3 className="text-sm font-bold mb-3 uppercase tracking-wider flex items-center gap-2 text-teal-300">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+          Smart AI Analytics & Operational Alerts
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div className="bg-white/10 backdrop-blur border border-white/10 rounded-lg p-3">
+            <span className="text-sky-300 font-bold uppercase text-[10px] block mb-1">⭐ J-Guruji Adoption Score</span>
+            <p className="leading-relaxed">
+              J-Guruji accounts for <strong className="text-white font-black">{kpi.overallJgurujiPerc.toFixed(1)}%</strong> of active app usage across <strong className="text-white">{kpi.schools}</strong> schools. 
+              {kpi.zeroJgurujiSchoolsCount > 0 ? ` ⚠️ ${kpi.zeroJgurujiSchoolsCount} schools have zero J-Guruji activity.` : ' Great adoption!'}
+            </p>
           </div>
-        </div>
 
-        {/* Top 10 Apps */}
-        <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative">
-          <ChartToolbar chartId="top-apps-chart" csvData={topApps} filename="top-10-apps" />
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Top 10 Applications</h3>
-          <div className="h-[300px]" id="top-apps-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topApps} layout="vertical" margin={{ top: 10, right: 30, left: 30, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.2} />
-                <XAxis type="number" tick={{fontSize: 10}} stroke="#64748b" tickFormatter={(v) => `${v}h`} />
-                <YAxis type="category" dataKey="name" tick={{fontSize: 11, fontWeight: 'bold'}} stroke="#64748b" width={80} />
-                <Tooltip content={<PremiumChartTooltip />} />
-                <Bar dataKey="hours" name="Usage" radius={[0, 4, 4, 0]}>
-                  {topApps.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="bg-white/10 backdrop-blur border border-white/10 rounded-lg p-3">
+            <span className="text-amber-300 font-bold uppercase text-[10px] block mb-1">💤 Idle Power Waste Warning</span>
+            <p className="leading-relaxed">
+              Devices were ON but idle for <strong className="text-amber-200 font-black">{formatHours(kpi.totalIdleHours)}</strong> ({kpi.overallIdlePerc.toFixed(1)}% of total uptime). 
+              <strong className="text-white font-bold">{kpi.idleHeavySchoolsCount}</strong> schools spend more time idle than active.
+            </p>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur border border-white/10 rounded-lg p-3">
+            <span className="text-emerald-300 font-bold uppercase text-[10px] block mb-1">🏆 District Leader</span>
+            <p className="leading-relaxed">
+              {kpi.bestDistrict ? (
+                <>District <strong className="text-emerald-200 font-black">{kpi.bestDistrict.district}</strong> leads in J-Guruji adoption with {formatHours(kpi.bestDistrict.jguruji)} usage.</>
+              ) : 'Active data loaded.'}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* District Comparison */}
-      <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative">
-        <ChartToolbar chartId="district-chart" csvData={districtList} filename="district-comparison" />
-        <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">District-Wise Comparison</h3>
-        <div className="h-[400px]" id="district-chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={districtList} margin={{ top: 10, right: 10, left: -20, bottom: 40 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-              <XAxis dataKey="district" tick={{fontSize: 11}} angle={-45} textAnchor="end" stroke="#64748b" />
-              <YAxis tick={{fontSize: 10}} stroke="#64748b" tickFormatter={(v) => `${v}h`} />
-              <Tooltip content={<PremiumChartTooltip />} />
-              <Legend verticalAlign="top" iconType="circle" wrapperStyle={{ fontSize: '12px', paddingBottom: '20px' }} />
-              <Bar dataKey="educational" name="Educational" stackId="a" fill={COLORS.educational[0]} radius={[0, 0, 0, 0]} />
-              <Bar dataKey="nonEducational" name="Non-Educational" stackId="a" fill={COLORS.nonEducational[0]} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* AI Insights Panel */}
-      <div className="portal-card bg-slate-50 dark:bg-slate-900/50 border border-indigo-100 dark:border-indigo-900/30 rounded-xl p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-          </div>
-          <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider">AI Usage Insights</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {kpi.nonEduHours > kpi.eduHours && (
-            <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 rounded-lg p-3">
-              <p className="text-xs font-bold text-rose-800 dark:text-rose-300 mb-1">Critical Observation</p>
-              <p className="text-sm text-rose-600 dark:text-rose-400">Overall non-educational usage ({formatHours(kpi.nonEduHours)}) exceeds educational usage ({formatHours(kpi.eduHours)}).</p>
-            </div>
-          )}
-          {districtList.length > 0 && (
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-lg p-3">
-              <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300 mb-1">Top District</p>
-              <p className="text-sm text-emerald-600 dark:text-emerald-400"><strong>{districtList[0].district}</strong> leads in total usage with {formatHours(districtList[0].total)}.</p>
-            </div>
-          )}
-          {appUsageList.find(a => a.name.toLowerCase().includes('jguruji')) && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-lg p-3">
-              <p className="text-xs font-bold text-blue-800 dark:text-blue-300 mb-1">Jguruji Adoption</p>
-              <p className="text-sm text-blue-600 dark:text-blue-400">Jguruji app accounts for {formatHours(appUsageList.find(a => a.name.toLowerCase().includes('jguruji')).hours)} of usage.</p>
-            </div>
-          )}
-          {processedData.schoolTableData.filter(s => s.eduPerc < 40).length > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg p-3">
-              <p className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-1">Low Edu % Warning</p>
-              <p className="text-sm text-amber-600 dark:text-amber-400">{processedData.schoolTableData.filter(s => s.eduPerc < 40).length} schools have less than 40% educational usage.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* School Level Table */}
-      <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">School-Level Analysis</h3>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <input
-              type="text"
-              placeholder="Search schools..."
-              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <select
-              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={rowsPerPage}
-              onChange={(e) => {
-                setRowsPerPage(e.target.value === 'All' ? 'All' : Number(e.target.value));
-                setCurrentPage(1);
-              }}
+      {/* Sub-View Selector (School-Level vs Device-Wise Report) */}
+      <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('school')}
+              className={`px-4 py-2 text-xs font-extrabold rounded-lg transition-all flex items-center gap-2 ${
+                activeTab === 'school'
+                  ? 'bg-teal-600 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200'
+              }`}
             >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value="All">All</option>
-            </select>
+              <SchoolIcon /> 🏫 School-Level Analysis
+            </button>
+            <button
+              onClick={() => setActiveTab('device')}
+              className={`px-4 py-2 text-xs font-extrabold rounded-lg transition-all flex items-center gap-2 ${
+                activeTab === 'device'
+                  ? 'bg-teal-600 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              <MonitorIcon /> 💻 Device-Wise Detailed Report
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            {activeTab === 'school' ? (
+              <button
+                onClick={exportSchoolData}
+                className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+              >
+                📥 Export School Report (Excel)
+              </button>
+            ) : (
+              <button
+                onClick={exportDeviceData}
+                className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+              >
+                📥 Export Device-Wise Details (Excel)
+              </button>
+            )}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
-                <th className="p-3 font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => handleSort('schoolName')}>School Name</th>
-                <th className="p-3 font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => handleSort('udise')}>UDISE</th>
-                <th className="p-3 font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => handleSort('district')}>District</th>
-                <th className="p-3 font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => handleSort('deviceCount')}>Devices</th>
-                <th className="p-3 font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => handleSort('totalHours')}>Total Usage</th>
-                <th className="p-3 font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => handleSort('eduPerc')}>Edu %</th>
-                <th className="p-3 font-semibold">Top App</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              {paginatedSchools.map((school, i) => (
-                <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-sm text-slate-700 dark:text-slate-300">
-                  <td className="p-3 font-medium truncate max-w-[200px]" title={school.schoolName}>{school.schoolName}</td>
-                  <td className="p-3">{school.udise}</td>
-                  <td className="p-3">{school.district}</td>
-                  <td className="p-3 font-semibold">{school.deviceCount}</td>
-                  <td className="p-3 font-semibold">{formatHours(school.totalHours)}</td>
-                  <td className="p-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
-                      school.eduPerc >= 70 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                      school.eduPerc >= 40 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
-                      'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
-                    }`}>
-                      {school.eduPerc.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="p-3 text-xs truncate max-w-[120px]" title={school.topAppName}>{school.topAppName}</td>
-                </tr>
-              ))}
-              {paginatedSchools.length === 0 && (
-                <tr>
-                  <td colSpan="7" className="p-6 text-center text-slate-500">No schools found matching the criteria.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        {rowsPerPage !== 'All' && sortedAndFilteredSchools.length > rowsPerPage && (
-          <div className="p-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/30">
-            <span className="text-xs text-slate-500">
-              Showing {(currentPage - 1) * rowsPerPage + 1} to {Math.min(currentPage * rowsPerPage, sortedAndFilteredSchools.length)} of {sortedAndFilteredSchools.length} entries
-            </span>
-            <div className="flex gap-1">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => prev - 1)}
-                className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 disabled:opacity-50"
-              >
-                Prev
-              </button>
-              <button
-                disabled={currentPage * rowsPerPage >= sortedAndFilteredSchools.length}
-                onClick={() => setCurrentPage(prev => prev + 1)}
-                className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 disabled:opacity-50"
-              >
-                Next
-              </button>
+
+        {/* TAB 1: SCHOOL-LEVEL TABLE */}
+        {activeTab === 'school' && (
+          <div>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                School Usage & Efficiency Breakdown
+              </h4>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <input
+                  type="text"
+                  placeholder="Search school, UDISE or district..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 w-full sm:w-64 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+                <select
+                  value={rowsPerPage}
+                  onChange={(e) => {
+                    setRowsPerPage(e.target.value === 'All' ? 'All' : Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                >
+                  <option value={10}>10 rows</option>
+                  <option value={25}>25 rows</option>
+                  <option value={50}>50 rows</option>
+                  <option value="All">All</option>
+                </select>
+              </div>
             </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('schoolName')}>School Name</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('udise')}>UDISE</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('district')}>District</th>
+                    <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('deviceCount')}>Devices</th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('upTimeHours')}>UpTime (Hr)</th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-400" onClick={() => handleSort('activeAppHours')}>Active App (Hr)</th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-400" onClick={() => handleSort('idleHours')}>Idle / Unused (Hr)</th>
+                    <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('activeUtilPerc')}>Util %</th>
+                    <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleSort('eduPerc')}>Edu %</th>
+                    <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-700 dark:text-sky-400" onClick={() => handleSort('jgurujiPerc')}>⭐ J-Guruji %</th>
+                    <th className="p-3">Top App</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {paginatedSchools.map((school, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="p-3 font-semibold text-slate-800 dark:text-slate-100 max-w-[200px] truncate" title={school.schoolName}>{school.schoolName}</td>
+                      <td className="p-3 font-mono">{school.udise}</td>
+                      <td className="p-3">{school.district}</td>
+                      <td className="p-3 text-center font-bold">{school.deviceCount}</td>
+                      <td className="p-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatHours(school.upTimeHours)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatHours(school.activeAppHours)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-amber-600 dark:text-amber-400">{formatHours(school.idleHours)}</td>
+                      <td className="p-3 text-center">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {school.activeUtilPerc.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                          school.eduPerc >= 70 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' :
+                          school.eduPerc >= 40 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' :
+                          'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                        }`}>
+                          {school.eduPerc.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                          {school.jgurujiPerc.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="p-3 font-medium max-w-[120px] truncate" title={school.topAppName}>{school.topAppName}</td>
+                    </tr>
+                  ))}
+                  {paginatedSchools.length === 0 && (
+                    <tr>
+                      <td colSpan="11" className="p-6 text-center text-slate-500">No schools found matching the filter criteria.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {rowsPerPage !== 'All' && sortedAndFilteredSchools.length > rowsPerPage && (
+              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/30">
+                <span className="text-xs text-slate-500">
+                  Showing {(currentPage - 1) * rowsPerPage + 1} to {Math.min(currentPage * rowsPerPage, sortedAndFilteredSchools.length)} of {sortedAndFilteredSchools.length} schools
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => prev - 1)}
+                    className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 disabled:opacity-50"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    disabled={currentPage * rowsPerPage >= sortedAndFilteredSchools.length}
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                    className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: DEVICE-WISE DETAILED TABLE */}
+        {activeTab === 'device' && (
+          <div>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Device Serial Wise Detailed Breakdown ({sortedAndFilteredDevices.length} devices)
+              </h4>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <input
+                  type="text"
+                  placeholder="Search device serial, school or district..."
+                  value={deviceSearchTerm}
+                  onChange={(e) => setDeviceSearchTerm(e.target.value)}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 w-full sm:w-64 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+                <select
+                  value={deviceRowsPerPage}
+                  onChange={(e) => {
+                    setDeviceRowsPerPage(e.target.value === 'All' ? 'All' : Number(e.target.value));
+                    setDeviceCurrentPage(1);
+                  }}
+                  className="px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                >
+                  <option value={10}>10 rows</option>
+                  <option value={25}>25 rows</option>
+                  <option value={50}>50 rows</option>
+                  <option value="All">All</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('serial')}>Device Serial</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('schoolName')}>School Name</th>
+                    <th className="p-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('district')}>District / Block</th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('upTimeHours')}>UpTime (Hr)</th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-400" onClick={() => handleDeviceSort('activeAppHours')}>Active App (Hr)</th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-amber-700 dark:text-amber-400" onClick={() => handleDeviceSort('idleHours')}>Idle (Hr)</th>
+                    <th className="p-3 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700" onClick={() => handleDeviceSort('activeUtilPerc')}>Util %</th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-700 dark:text-sky-400" onClick={() => handleDeviceSort('jgurujiHours')}>J-Guruji (Hr)</th>
+                    <th className="p-3">Top App</th>
+                    <th className="p-3 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {paginatedDevices.map((dev, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="p-3 font-mono font-bold text-slate-800 dark:text-slate-100">{dev.serial}</td>
+                      <td className="p-3 font-medium max-w-[200px] truncate" title={dev.schoolName}>{dev.schoolName}</td>
+                      <td className="p-3">{dev.district} / {dev.block}</td>
+                      <td className="p-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300">{formatHours(dev.upTimeHours)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatHours(dev.activeAppHours)}</td>
+                      <td className="p-3 text-right font-mono font-bold text-amber-600 dark:text-amber-400">{formatHours(dev.idleHours)}</td>
+                      <td className="p-3 text-center font-bold">{dev.activeUtilPerc.toFixed(1)}%</td>
+                      <td className="p-3 text-right font-mono font-bold text-sky-600 dark:text-sky-400">{formatHours(dev.jgurujiHours)}</td>
+                      <td className="p-3 font-medium max-w-[120px] truncate" title={dev.topAppName}>{dev.topAppName}</td>
+                      <td className="p-3 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                          dev.statusTag === 'High Edu' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                          dev.statusTag === 'Non-Edu Misuse' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                          'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        }`}>
+                          {dev.statusTag}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {paginatedDevices.length === 0 && (
+                    <tr>
+                      <td colSpan="10" className="p-6 text-center text-slate-500">No devices found matching the filter criteria.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {deviceRowsPerPage !== 'All' && sortedAndFilteredDevices.length > deviceRowsPerPage && (
+              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/30">
+                <span className="text-xs text-slate-500">
+                  Showing {(deviceCurrentPage - 1) * deviceRowsPerPage + 1} to {Math.min(deviceCurrentPage * deviceRowsPerPage, sortedAndFilteredDevices.length)} of {sortedAndFilteredDevices.length} devices
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    disabled={deviceCurrentPage === 1}
+                    onClick={() => setDeviceCurrentPage(prev => prev - 1)}
+                    className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 disabled:opacity-50"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    disabled={deviceCurrentPage * deviceRowsPerPage >= sortedAndFilteredDevices.length}
+                    onClick={() => setDeviceCurrentPage(prev => prev + 1)}
+                    className="px-3 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
