@@ -612,12 +612,17 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
     { title: "⭐ J-Guruji Adoption", value: `${formatHours(kpi.totalJgurujiHours)} (${kpi.overallJgurujiPerc.toFixed(1)}%)`, icon: <StarIcon />, color: "from-sky-500 to-sky-600" }
   ];
 
-  // Column Chart Data for Device UpTime Allocation (Includes % in labelText)
+  // Column Chart Data for Device UpTime Allocation (Calculated with respect to Total Device UpTime)
+  const eduUpTimePerc = kpi.totalUpTimeHours > 0 ? (kpi.totalEduHours / kpi.totalUpTimeHours) * 100 : 0;
+  const jgurujiUpTimePerc = kpi.totalUpTimeHours > 0 ? (kpi.totalJgurujiHours / kpi.totalUpTimeHours) * 100 : 0;
+  const nonEduUpTimePerc = kpi.totalUpTimeHours > 0 ? (kpi.totalNonEduHours / kpi.totalUpTimeHours) * 100 : 0;
+  const idleUpTimePerc = kpi.totalUpTimeHours > 0 ? (kpi.totalIdleHours / kpi.totalUpTimeHours) * 100 : 0;
+
   const uptimeColumnData = [
-    { name: 'Educational Apps', hours: kpi.totalEduHours, perc: kpi.overallEduPerc, fill: '#059669', labelText: `${formatHours(kpi.totalEduHours)} (${kpi.overallEduPerc.toFixed(1)}%)` },
-    { name: '⭐ J-Guruji', hours: kpi.totalJgurujiHours, perc: kpi.overallJgurujiPerc, fill: '#0284c7', labelText: `${formatHours(kpi.totalJgurujiHours)} (${kpi.overallJgurujiPerc.toFixed(1)}%)` },
-    { name: 'Non-Educational', hours: kpi.totalNonEduHours, perc: kpi.overallNonEduPerc, fill: '#e11d48', labelText: `${formatHours(kpi.totalNonEduHours)} (${kpi.overallNonEduPerc.toFixed(1)}%)` },
-    { name: 'Idle / Unused', hours: kpi.totalIdleHours, perc: kpi.overallIdlePerc, fill: '#64748b', labelText: `${formatHours(kpi.totalIdleHours)} (${kpi.overallIdlePerc.toFixed(1)}%)` }
+    { name: 'Educational Apps', hours: kpi.totalEduHours, perc: eduUpTimePerc, fill: '#059669', labelText: `${formatHours(kpi.totalEduHours)} (${eduUpTimePerc.toFixed(1)}%)` },
+    { name: '⭐ J-Guruji', hours: kpi.totalJgurujiHours, perc: jgurujiUpTimePerc, fill: '#0284c7', labelText: `${formatHours(kpi.totalJgurujiHours)} (${jgurujiUpTimePerc.toFixed(1)}%)` },
+    { name: 'Non-Educational', hours: kpi.totalNonEduHours, perc: nonEduUpTimePerc, fill: '#e11d48', labelText: `${formatHours(kpi.totalNonEduHours)} (${nonEduUpTimePerc.toFixed(1)}%)` },
+    { name: 'Idle / Unused', hours: kpi.totalIdleHours, perc: idleUpTimePerc, fill: '#64748b', labelText: `${formatHours(kpi.totalIdleHours)} (${idleUpTimePerc.toFixed(1)}%)` }
   ];
 
   // Drill-down Modal Data filtering
@@ -731,8 +736,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
         {/* PIC 2 FEATURE: Device UpTime Allocation (Vertical Column Chart with % Labels) */}
         <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
           <ChartToolbar chartId="uptime-column-chart" csvData={uptimeColumnData} filename="uptime-allocation-column-chart" />
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider">
-            Device UpTime Allocation (Active vs Idle)
+          <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-4 uppercase tracking-wider flex items-center gap-2">
+            <span>Device UpTime Allocation</span>
+            <span className="text-[10px] text-slate-400 font-normal normal-case">(% of Total System UpTime)</span>
           </h3>
           <div className="h-[280px]" id="uptime-column-chart">
             <ResponsiveContainer width="100%" height="100%">
