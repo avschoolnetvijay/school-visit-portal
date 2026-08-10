@@ -604,12 +604,12 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
   const { kpi, appUsageList, maxAppHours, dailyTrendList, schoolTableData } = processedData;
 
   const kpiCards = [
-    { title: "Total Devices", value: kpi.devices, icon: <MonitorIcon />, color: "from-blue-500 to-blue-600" },
-    { title: "Schools Covered", value: kpi.schools, icon: <SchoolIcon />, color: "from-purple-500 to-purple-600" },
-    { title: "Total Device UpTime", value: formatHours(kpi.totalUpTimeHours), icon: <ClockIcon />, color: "from-slate-600 to-slate-700" },
-    { title: "Active App Usage", value: `${formatHours(kpi.totalActiveAppHours)} (${kpi.overallActiveUtilPerc.toFixed(1)}%)`, icon: <PlayIcon />, color: "from-emerald-500 to-emerald-600" },
-    { title: "Idle / Unused Hours", value: `${formatHours(kpi.totalIdleHours)} (${kpi.overallIdlePerc.toFixed(1)}%)`, icon: <PauseIcon />, color: "from-amber-500 to-amber-600" },
-    { title: "⭐ J-Guruji Adoption", value: `${formatHours(kpi.totalJgurujiHours)} (${kpi.overallJgurujiPerc.toFixed(1)}%)`, icon: <StarIcon />, color: "from-sky-500 to-sky-600" }
+    { title: "Total Devices", value: kpi.devices, subtitle: "Active Units", icon: <MonitorIcon />, color: "from-blue-500 to-blue-600" },
+    { title: "Schools Covered", value: kpi.schools, subtitle: "Unique UDISE", icon: <SchoolIcon />, color: "from-purple-500 to-purple-600" },
+    { title: "Total Device UpTime", value: formatHours(kpi.totalUpTimeHours), subtitle: "Power ON Duration", icon: <ClockIcon />, color: "from-slate-600 to-slate-700" },
+    { title: "Active App Usage", value: formatHours(kpi.totalActiveAppHours), subtitle: `${kpi.overallActiveUtilPerc.toFixed(1)}% of UpTime`, icon: <PlayIcon />, color: "from-emerald-500 to-emerald-600" },
+    { title: "Idle / Unused Hours", value: formatHours(kpi.totalIdleHours), subtitle: `${kpi.overallIdlePerc.toFixed(1)}% of UpTime`, icon: <PauseIcon />, color: "from-amber-500 to-amber-600" },
+    { title: "⭐ J-Guruji Adoption", value: formatHours(kpi.totalJgurujiHours), subtitle: `${kpi.overallJgurujiPerc.toFixed(1)}% of Active Apps`, icon: <StarIcon />, color: "from-sky-500 to-sky-600" }
   ];
 
   // Column Chart Data for Device UpTime Allocation (Calculated with respect to Total Device UpTime)
@@ -655,8 +655,11 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
             <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${card.color} text-white flex items-center justify-center mb-3 shadow-sm`}>
               {card.icon}
             </div>
-            <p className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">{card.title}</p>
+            <p className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold uppercase tracking-wider mb-1">{card.title}</p>
             <p className="font-extrabold text-slate-800 dark:text-white text-base truncate">{card.value}</p>
+            {card.subtitle && (
+              <p className="text-[10px] font-bold text-teal-600 dark:text-teal-400 mt-0.5">{card.subtitle}</p>
+            )}
           </div>
         ))}
       </div>
