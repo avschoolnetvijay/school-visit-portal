@@ -1845,8 +1845,8 @@ const App = () => {
                             const distKey = cleanKeys.find(k => k.clean.includes('district'))?.orig;
                             const blockKey = cleanKeys.find(k => k.clean.includes('block'))?.orig;
                             const serialKey = cleanKeys.find(k => k.clean.includes('serialnumber') || k.clean.includes('serial'))?.orig;
-                            const dateKey = cleanKeys.find(k => k.clean.includes('processdate') || k.clean.includes('date'))?.orig;
-                            const procKey = cleanKeys.find(k => k.clean.includes('processname') || k.clean.includes('process') || k.clean.includes('app'))?.orig;
+                            const dateKey = cleanKeys.find(k => k.clean.includes('processdate') || (k.clean.includes('date') && !k.clean.includes('name')) || k.clean === 'date')?.orig;
+                            const procKey = cleanKeys.find(k => k.clean.includes('processname') || k.clean.includes('appname') || k.clean === 'process' || k.clean === 'application' || k.clean === 'app')?.orig;
                             const hrsKey = cleanKeys.find(k => k.clean.includes('totalhour') || k.clean.includes('hours') || k.clean.includes('usedhour') || k.clean.includes('duration'))?.orig;
 
                             const rawDate = dateKey ? r[dateKey] : '';

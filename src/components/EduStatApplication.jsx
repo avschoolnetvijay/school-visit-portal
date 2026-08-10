@@ -8,9 +8,17 @@ import { downloadSVG, downloadPNG, downloadCSV } from '../utils';
 
 // Hardcoded Categories
 const APP_CATEGORIES = {
-  educational: ['Jguruji', 'Smart Board', 'Office', 'Browser', 'Acrobat', 'pdf', 'arduino', 'audacity', 'photoshop', 'msteam', 'zoom', 'bluefish editor', 'Adobe', 'Note', 'notepad'],
-  nonEducational: ['YouTube', 'WhatsApp', 'ChatGPT', 'Games', 'BlueStacks', 'filmora'],
-  system: ['UpTime', 'anydesk', 'winrar', 'zip', 'Avro Keyboard', 'eyeris']
+  educational: [
+    'jguruji', 'smart board', 'office', 'browser', 'acrobat', 'pdf',
+    'arduino', 'audacity', 'photoshop', 'msteam', 'zoom', 'bluefish editor',
+    'adobe', 'note', 'notepad', 'vlc', 'eyeris'
+  ],
+  nonEducational: [
+    'youtube', 'whatsapp', 'chatgpt', 'games', 'bluestacks', 'filmora'
+  ],
+  system: [
+    'uptime', 'anydesk', 'winrar', 'zip', 'avro keyboard'
+  ]
 };
 
 const COLORS = {
@@ -28,10 +36,11 @@ const formatHours = (h) => {
 
 const getCategory = (appName) => {
   if (!appName) return 'system';
-  const name = appName.toLowerCase();
+  const name = String(appName).trim().toLowerCase();
   
-  if (APP_CATEGORIES.educational.some(app => name.includes(app.toLowerCase()))) return 'educational';
-  if (APP_CATEGORIES.nonEducational.some(app => name.includes(app.toLowerCase()))) return 'nonEducational';
+  if (APP_CATEGORIES.educational.some(app => name === app || name.includes(app))) return 'educational';
+  if (APP_CATEGORIES.nonEducational.some(app => name === app || name.includes(app))) return 'nonEducational';
+  if (APP_CATEGORIES.system.some(app => name === app || name.includes(app))) return 'system';
   return 'system';
 };
 
