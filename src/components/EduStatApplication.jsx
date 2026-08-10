@@ -320,10 +320,12 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
       .sort((a, b) => b.hours - a.hours)
       .map((app, i) => {
         let colorList = COLORS[app.category] || COLORS.system;
+        const appSharePerc = totalActiveAppHours > 0 ? (app.hours / totalActiveAppHours) * 100 : 0;
         return {
           ...app,
           totalDevices: app.devices.size,
           displayName: `${app.name} Usage`,
+          appSharePerc,
           fill: colorList[i % colorList.length]
         };
       });
@@ -715,6 +717,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
                 'App Name': a.displayName,
                 'Total Devices': a.totalDevices,
                 'Hours': formatHours(a.hours),
+                'Share %': a.appSharePerc.toFixed(1) + '%',
                 'Category': a.category
               })), 'Full_Application_Usage_Breakdown.csv')}
               className="text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
@@ -731,7 +734,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
                   <th className="p-3 w-16">Sr No.</th>
                   <th className="p-3">App Name</th>
                   <th className="p-3 text-center">Total Devices</th>
-                  <th className="p-3">Hours</th>
+                  <th className="p-3">Hours & % Share</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -744,7 +747,12 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
                       <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400 font-mono text-sm">{app.totalDevices}</td>
                       <td className="p-3">
                         <div className="space-y-1">
-                          <span className="font-extrabold text-slate-700 dark:text-slate-300 block">{formatHours(app.hours)}</span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-extrabold text-slate-700 dark:text-slate-300">{formatHours(app.hours)}</span>
+                            <span className="text-[11px] font-black text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-1.5 py-0.5 rounded font-mono">
+                              {app.appSharePerc.toFixed(1)}%
+                            </span>
+                          </div>
                           <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                             <div
                               className="h-full rounded-full transition-all duration-500"
