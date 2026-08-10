@@ -57,6 +57,7 @@ const Setup = ({
     const timelineVisits = activeVisits || visits;
     const timelineJhpms = activeJhpmsLab || jhpmsLab;
     const timelineEdustat = activeEdustat || edustat;
+    const timelineEdustatApp = activeEdustatApp || edustatApp;
     const timelineVisit360 = activeVisit360 || visit360;
 
     const mismatchList = React.useMemo(() => {
