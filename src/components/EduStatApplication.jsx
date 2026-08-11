@@ -121,6 +121,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
   // Drill-down Modal State
   const [drillModal, setDrillModal] = useState(null); // { filterType: 'all' | 'zero', searchTerm: '' }
 
+  // Grouping state for J-Guruji Adoption Comparison chart
+  const [jgurujiGroupBy, setJgurujiGroupBy] = useState('project'); // 'project' | 'zone' | 'district' | 'ccDef'
+
   // 1. Build Master Lookups for Project, CC/DEF, ICT Instructor
   const schoolLookup = useMemo(() => {
     const map = {};
@@ -132,7 +135,8 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
         map[u] = {
           projectName: s.project_name || s.project || '-',
           ccDef: resolvedCC,
-          rawCC: rawCC
+          rawCC: rawCC,
+          zone: s.zone || '-'
         };
       }
     });
@@ -247,6 +251,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
             block: record.block || '-',
             projectName: schMeta.projectName || record.project || '-',
             ccDef: schMeta.ccDef || record.visitor_name || '-',
+            zone: schMeta.zone || '-',
             ictInstructor: instList.length > 0 ? instList.join(', ') : '-',
             devices: new Set(),
             upTimeHours: 0,
@@ -286,6 +291,7 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
             block: record.block || '-',
             projectName: schMeta.projectName || record.project || '-',
             ccDef: schMeta.ccDef || record.visitor_name || '-',
+            zone: schMeta.zone || '-',
             ictInstructor: instList.length > 0 ? instList.join(', ') : '-',
             upTimeHours: 0,
             activeAppHours: 0,
@@ -389,39 +395,47 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
       };
     });
 
-    // Project-wise Usage Breakdown for J-Guruji Comparison
-    const projectUsageMap = {};
-    schoolTableData.forEach(sch => {
-      const pName = sch.projectName && sch.projectName !== '-' ? sch.projectName : 'Other Projects';
-      if (!projectUsageMap[pName]) {
-        projectUsageMap[pName] = {
-          name: pName,
-          jgurujiHours: 0,
-          activeAppHours: 0,
-          upTimeHours: 0,
-          schoolCount: 0,
-          deviceCount: 0
-        };
-      }
-      projectUsageMap[pName].jgurujiHours += sch.jgurujiHours;
-      projectUsageMap[pName].activeAppHours += sch.activeAppHours;
-      projectUsageMap[pName].upTimeHours += sch.upTimeHours;
-      projectUsageMap[pName].schoolCount += 1;
-      projectUsageMap[pName].deviceCount += sch.deviceCount;
-    });
+    // Helper to generate grouped adoption list for comparison chart
+    const getGroupedList = (key, fallbackLabel) => {
+      const groupMap = {};
+      schoolTableData.forEach(sch => {
+        const val = sch[key] && sch[key] !== '-' ? sch[key] : fallbackLabel;
+        if (!groupMap[val]) {
+          groupMap[val] = {
+            name: val,
+            jgurujiHours: 0,
+            activeAppHours: 0,
+            upTimeHours: 0,
+            schoolCount: 0,
+            deviceCount: 0
+          };
+        }
+        groupMap[val].jgurujiHours += sch.jgurujiHours;
+        groupMap[val].activeAppHours += sch.activeAppHours;
+        groupMap[val].upTimeHours += sch.upTimeHours;
+        groupMap[val].schoolCount += 1;
+        groupMap[val].deviceCount += sch.deviceCount;
+      });
 
-    const projectList = Object.values(projectUsageMap)
-      .map((p, i) => {
-        const jgurujiPerc = p.activeAppHours > 0 ? (p.jgurujiHours / p.activeAppHours) * 100 : 0;
-        const palette = ['#0284c7', '#059669', '#7c3aed', '#db2777', '#ea580c', '#2563eb', '#d97706', '#0d9488'];
-        return {
-          ...p,
-          jgurujiPerc,
-          fill: palette[i % palette.length],
-          labelText: `${jgurujiPerc.toFixed(1)}% (${formatHours(p.jgurujiHours)})`
-        };
-      })
-      .sort((a, b) => b.jgurujiPerc - a.jgurujiPerc);
+      const palette = ['#0284c7', '#059669', '#7c3aed', '#db2777', '#ea580c', '#2563eb', '#d97706', '#0d9488'];
+
+      return Object.values(groupMap)
+        .map((p, i) => {
+          const jgurujiPerc = p.activeAppHours > 0 ? (p.jgurujiHours / p.activeAppHours) * 100 : 0;
+          return {
+            ...p,
+            jgurujiPerc,
+            fill: palette[i % palette.length],
+            labelText: `${jgurujiPerc.toFixed(1)}% (${formatHours(p.jgurujiHours)})`
+          };
+        })
+        .sort((a, b) => b.jgurujiPerc - a.jgurujiPerc);
+    };
+
+    const projectList = getGroupedList('projectName', 'Other Projects');
+    const zoneList = getGroupedList('zone', 'Other Zones');
+    const districtAdoptionList = getGroupedList('district', 'Other Districts');
+    const ccDefList = getGroupedList('ccDef', 'Other CCs/DEFs');
 
     // AI Insights Generator & District Leader Project Mapping
     const zeroJgurujiSchoolsCount = schoolTableData.filter(s => s.jgurujiHours === 0).length;
@@ -466,6 +480,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
       dailyTrendList,
       districtList,
       projectList,
+      zoneList,
+      districtAdoptionList,
+      ccDefList,
       schoolTableData,
       deviceTableData,
       topApps: appUsageList.slice(0, 10)
@@ -638,7 +655,32 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
     );
   }
 
-  const { kpi, appUsageList, maxAppHours, dailyTrendList, projectList, schoolTableData } = processedData;
+  const {
+    kpi,
+    appUsageList,
+    maxAppHours,
+    dailyTrendList,
+    projectList,
+    zoneList,
+    districtAdoptionList,
+    ccDefList,
+    schoolTableData
+  } = processedData;
+
+  // Resolve current active adoption list based on selected grouping state
+  const activeAdoptionList = useMemo(() => {
+    switch (jgurujiGroupBy) {
+      case 'zone':
+        return zoneList || [];
+      case 'district':
+        return districtAdoptionList || [];
+      case 'ccDef':
+        return ccDefList || [];
+      case 'project':
+      default:
+        return projectList || [];
+    }
+  }, [jgurujiGroupBy, projectList, zoneList, districtAdoptionList, ccDefList]);
 
   const kpiCards = [
     { title: "Total Devices", value: kpi.devices, subtitle: "Active Units", icon: <MonitorIcon />, color: "from-blue-500 to-blue-600" },
@@ -866,31 +908,57 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
 
       {/* FEATURE: Project-Wise J-Guruji Adoption Comparison (Vertical Column Chart) */}
       <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative">
-        <ChartToolbar chartId="project-jguruji-column-chart" csvData={projectList.map(p => ({
-          'Project Name': p.name,
-          'J-Guruji Adoption %': p.jgurujiPerc.toFixed(1) + '%',
-          'J-Guruji Usage (Hr)': p.jgurujiHours.toFixed(2),
-          'Total Active App Usage (Hr)': p.activeAppHours.toFixed(2),
-          'Total UpTime (Hr)': p.upTimeHours.toFixed(2),
-          'Schools Count': p.schoolCount,
-          'Devices Count': p.deviceCount
-        }))} filename="project-wise-jguruji-adoption" />
-        <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-1 uppercase tracking-wider flex items-center gap-2">
-          <span>⭐ Project-Wise J-Guruji Adoption Comparison</span>
-          <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold normal-case">(% of Active App Usage)</span>
-        </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-          Compares J-Guruji app adoption percentage across projects for the selected filter date range.
-        </p>
-        <div className="h-[280px]" id="project-jguruji-column-chart">
+        <ChartToolbar
+          chartId="comparison-jguruji-column-chart"
+          csvData={activeAdoptionList.map(item => {
+            const labelHeader = jgurujiGroupBy === 'project' ? 'Project Name' :
+                                jgurujiGroupBy === 'zone' ? 'Zone' :
+                                jgurujiGroupBy === 'district' ? 'District' : 'CC / DEF';
+            return {
+              [labelHeader]: item.name,
+              'J-Guruji Adoption %': item.jgurujiPerc.toFixed(1) + '%',
+              'J-Guruji Usage (Hr)': item.jgurujiHours.toFixed(2),
+              'Total Active App Usage (Hr)': item.activeAppHours.toFixed(2),
+              'Total UpTime (Hr)': item.upTimeHours.toFixed(2),
+              'Schools Count': item.schoolCount,
+              'Devices Count': item.deviceCount
+            };
+          })}
+          filename={`${jgurujiGroupBy}-wise-jguruji-adoption`}
+        />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 pb-2">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-1 uppercase tracking-wider flex items-center gap-2">
+              <span>⭐ {jgurujiGroupBy === 'project' ? 'Project' : jgurujiGroupBy === 'zone' ? 'Zone' : jgurujiGroupBy === 'district' ? 'District' : 'CC/DEF'}-Wise J-Guruji Adoption Comparison</span>
+              <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold normal-case">(% of Active App Usage)</span>
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Compares J-Guruji app adoption percentage across {jgurujiGroupBy === 'project' ? 'projects' : jgurujiGroupBy === 'zone' ? 'zones' : jgurujiGroupBy === 'district' ? 'districts' : 'CCs/DEFs'} for the selected filter date range.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 mr-8 z-20">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Group By:</span>
+            <select
+              value={jgurujiGroupBy}
+              onChange={(e) => setJgurujiGroupBy(e.target.value)}
+              className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            >
+              <option value="project">Project wise</option>
+              <option value="zone">Zone wise</option>
+              <option value="district">District wise</option>
+              <option value="ccDef">CC/DEF wise</option>
+            </select>
+          </div>
+        </div>
+        <div className="h-[280px]" id="comparison-jguruji-column-chart">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={projectList} margin={{ top: 25, right: 30, left: 10, bottom: 25 }}>
+            <BarChart data={activeAdoptionList} margin={{ top: 25, right: 30, left: 10, bottom: 25 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 'bold' }} />
               <YAxis tickFormatter={(v) => `${v.toFixed(0)}%`} domain={[0, 'auto']} tick={{ fontSize: 10 }} />
               <Tooltip content={<PremiumChartTooltip />} />
               <Bar dataKey="jgurujiPerc" name="J-Guruji Adoption %" radius={[8, 8, 0, 0]}>
-                {projectList.map((entry, index) => (
+                {activeAdoptionList.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
                 ))}
                 <LabelList
