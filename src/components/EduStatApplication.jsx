@@ -82,13 +82,20 @@ const PremiumChartTooltip = ({ active, payload, label }) => {
       <div className="space-y-1.5">
         {payload.map((p, idx) => {
           const bulletColor = p.color || p.payload?.fill || '#0d9488';
+          const isPercentage = String(p.dataKey || '').toLowerCase().includes('perc');
           return (
             <div key={idx} className="flex items-center justify-between gap-4 font-bold py-0.5">
               <div className="flex items-center gap-1.5 text-[#d1d5db]">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: bulletColor }} />
                 <span>{p.name || p.dataKey}:</span>
               </div>
-              <span className="font-black text-white">{typeof p.value === 'number' ? (p.dataKey === 'devices' ? p.value : formatHours(p.value)) : p.value}</span>
+              <span className="font-black text-white">
+                {typeof p.value === 'number'
+                  ? (p.dataKey === 'devices'
+                      ? p.value
+                      : (isPercentage ? `${p.value.toFixed(1)}%` : formatHours(p.value)))
+                  : p.value}
+              </span>
             </div>
           );
         })}
@@ -123,6 +130,9 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
 
   // Grouping state for J-Guruji Adoption Comparison chart
   const [jgurujiGroupBy, setJgurujiGroupBy] = useState('project'); // 'project' | 'zone' | 'district' | 'ccDef'
+
+  // Grouping state for Active App Usage Comparison chart
+  const [activeAppGroupBy, setActiveAppGroupBy] = useState('project'); // 'project' | 'zone' | 'district' | 'ccDef'
 
   // 1. Build Master Lookups for Project, CC/DEF, ICT Instructor
   const schoolLookup = useMemo(() => {
@@ -422,11 +432,14 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
       return Object.values(groupMap)
         .map((p, i) => {
           const jgurujiPerc = p.activeAppHours > 0 ? (p.jgurujiHours / p.activeAppHours) * 100 : 0;
+          const activeAppPerc = p.upTimeHours > 0 ? (p.activeAppHours / p.upTimeHours) * 100 : 0;
           return {
             ...p,
             jgurujiPerc,
+            activeAppPerc,
             fill: palette[i % palette.length],
-            labelText: `${jgurujiPerc.toFixed(1)}% (${formatHours(p.jgurujiHours)})`
+            labelText: `${jgurujiPerc.toFixed(1)}% (${formatHours(p.jgurujiHours)})`,
+            activeAppLabelText: `${activeAppPerc.toFixed(1)}% (${formatHours(p.activeAppHours)})`
           };
         })
         .sort((a, b) => b.jgurujiPerc - a.jgurujiPerc);
@@ -681,6 +694,27 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
         return projectList || [];
     }
   }, [jgurujiGroupBy, projectList, zoneList, districtAdoptionList, ccDefList]);
+
+  // Resolve current active app usage list based on selected grouping state
+  const activeAppUsageList = useMemo(() => {
+    let list = [];
+    switch (activeAppGroupBy) {
+      case 'zone':
+        list = zoneList || [];
+        break;
+      case 'district':
+        list = districtAdoptionList || [];
+        break;
+      case 'ccDef':
+        list = ccDefList || [];
+        break;
+      case 'project':
+      default:
+        list = projectList || [];
+        break;
+    }
+    return [...list].sort((a, b) => b.activeAppPerc - a.activeAppPerc);
+  }, [activeAppGroupBy, projectList, zoneList, districtAdoptionList, ccDefList]);
 
   const kpiCards = [
     { title: "Total Devices", value: kpi.devices, subtitle: "Active Units", icon: <MonitorIcon />, color: "from-blue-500 to-blue-600" },
@@ -965,6 +999,71 @@ const EduStatApplication = ({ edustatAppData = [], schools = [], manpower = [], 
                   dataKey="labelText"
                   position="top"
                   style={{ fontSize: '11px', fontWeight: 'bold', fill: '#0284c7' }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* FEATURE: Active App Usage Comparison (Vertical Column Chart) */}
+      <div className="portal-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm relative">
+        <ChartToolbar
+          chartId="comparison-active-app-column-chart"
+          csvData={activeAppUsageList.map(item => {
+            const labelHeader = activeAppGroupBy === 'project' ? 'Project Name' :
+                                activeAppGroupBy === 'zone' ? 'Zone' :
+                                activeAppGroupBy === 'district' ? 'District' : 'CC / DEF';
+            return {
+              [labelHeader]: item.name,
+              'Active App Usage %': item.activeAppPerc.toFixed(1) + '%',
+              'Active App Usage (Hr)': item.activeAppHours.toFixed(2),
+              'Total UpTime (Hr)': item.upTimeHours.toFixed(2),
+              'Schools Count': item.schoolCount,
+              'Devices Count': item.deviceCount
+            };
+          })}
+          filename={`${activeAppGroupBy}-wise-active-app-usage`}
+        />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 pb-2">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-1 uppercase tracking-wider flex items-center gap-2">
+              <span>⭐ {activeAppGroupBy === 'project' ? 'Project' : activeAppGroupBy === 'zone' ? 'Zone' : activeAppGroupBy === 'district' ? 'District' : 'CC/DEF'}-Wise Active App Usage Comparison</span>
+              <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold normal-case">(% of Total UpTime)</span>
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Compares Active App Usage percentage of uptime across {activeAppGroupBy === 'project' ? 'projects' : activeAppGroupBy === 'zone' ? 'zones' : activeAppGroupBy === 'district' ? 'districts' : 'CCs/DEFs'} for the selected filter date range.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 mr-8 z-20">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Group By:</span>
+            <select
+              value={activeAppGroupBy}
+              onChange={(e) => setActiveAppGroupBy(e.target.value)}
+              className="px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            >
+              <option value="project">Project wise</option>
+              <option value="zone">Zone wise</option>
+              <option value="district">District wise</option>
+              <option value="ccDef">CC/DEF wise</option>
+            </select>
+          </div>
+        </div>
+        <div className="h-[280px]" id="comparison-active-app-column-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={activeAppUsageList} margin={{ top: 25, right: 30, left: 10, bottom: 25 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 'bold' }} />
+              <YAxis tickFormatter={(v) => `${v.toFixed(0)}%`} domain={[0, 'auto']} tick={{ fontSize: 10 }} />
+              <Tooltip content={<PremiumChartTooltip />} />
+              <Bar dataKey="activeAppPerc" name="Active App Usage %" radius={[8, 8, 0, 0]}>
+                {activeAppUsageList.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+                <LabelList
+                  dataKey="activeAppLabelText"
+                  position="top"
+                  style={{ fontSize: '11px', fontWeight: 'bold', fill: '#0d9488' }}
                 />
               </Bar>
             </BarChart>
