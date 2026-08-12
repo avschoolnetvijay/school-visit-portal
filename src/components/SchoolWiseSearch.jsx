@@ -698,6 +698,7 @@ const SchoolWiseSearch = ({
             totalEduHours,
             unsyncedCount,
             unsyncedDevices,
+            totalDevices: schoolDevices.length,
             activeInstructor,
             lastWorkingInstructor,
             qprVisits,
@@ -1061,6 +1062,9 @@ const SchoolWiseSearch = ({
                                     }`}>
                                         {schoolProfile.unsyncedCount}
                                         {schoolProfile.unsyncedCount > 0 && <span className="text-[10px] font-bold text-rose-600 underline uppercase ml-1 animate-pulse">View</span>}
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-1 font-semibold">
+                                        Total Devices: {schoolProfile.totalDevices}
                                     </div>
                                 </div>
                             </div>
