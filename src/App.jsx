@@ -155,19 +155,48 @@ const deduplicateVisits = (visitList) => {
 };
 
 const mergeEdustat = (existing, newRows) => {
-    const seen = new Set();
-    const merged = [];
+    const map = new Map();
     const addRow = (r) => {
         const normDate = r.date ? String(r.date).split('T')[0] : '';
-        const sig = `${r.udise || ''}_${r.serial || ''}_${normDate}_${Number(r.hours || 0).toFixed(4)}`;
-        if (!seen.has(sig)) {
-            seen.add(sig);
-            merged.push(r);
+        const key = `${r.udise || ''}_${r.serial || ''}_${normDate}`;
+        const newHours = Number(r.hours || 0);
+        
+        if (!map.has(key)) {
+            map.set(key, r);
+        } else {
+            const existingRow = map.get(key);
+            const existingHours = Number(existingRow.hours || 0);
+            if (newHours > existingHours) {
+                map.set(key, r);
+            }
         }
     };
     if (Array.isArray(existing)) existing.forEach(addRow);
     if (Array.isArray(newRows)) newRows.forEach(addRow);
-    return merged;
+    return Array.from(map.values());
+};
+
+const mergeEdustatApp = (existing, newRows) => {
+    const map = new Map();
+    const addRow = (r) => {
+        const normDate = r.date ? String(r.date).split('T')[0] : '';
+        const normProc = String(r.processName || '').trim().toLowerCase();
+        const key = `${r.udise || ''}_${r.serial || ''}_${normDate}_${normProc}`;
+        const newHours = Number(r.hours || 0);
+        
+        if (!map.has(key)) {
+            map.set(key, r);
+        } else {
+            const existingRow = map.get(key);
+            const existingHours = Number(existingRow.hours || 0);
+            if (newHours > existingHours) {
+                map.set(key, r);
+            }
+        }
+    };
+    if (Array.isArray(existing)) existing.forEach(addRow);
+    if (Array.isArray(newRows)) newRows.forEach(addRow);
+    return Array.from(map.values());
 };
 
 const mergeJhpms = (existing, newRows) => {
@@ -311,6 +340,7 @@ const App = () => {
     const combinedVisits = useMemo(() => mergeVisits(visits, tempVisits), [visits, tempVisits]);
     const combinedJhpmsLab = useMemo(() => mergeJhpms(jhpmsLab, tempJhpmsLab), [jhpmsLab, tempJhpmsLab]);
     const combinedEdustat = useMemo(() => mergeEdustat(edustat, tempEdustat), [edustat, tempEdustat]);
+    const combinedEdustatApp = useMemo(() => mergeEdustatApp(edustatApp, tempEdustatApp), [edustatApp, tempEdustatApp]);
 
     // Metadata states
     const [visitsMeta, setVisitsMeta] = useState(null);
@@ -942,7 +972,12 @@ const App = () => {
                         resEdustatMaster,
                         adminVisit360,
                         adminVisit360Meta,
-                        resChecklist
+                        resChecklist,
+                        
+                        adminEdustatApp,
+                        adminEdustatAppMeta,
+                        customEdustatApp,
+                        customEdustatAppMeta
                     ] = await Promise.all([
                         get('schools', 'admin_'),
                         get('manpower', 'admin_'),
@@ -964,7 +999,12 @@ const App = () => {
                         get('edustat_master'),
                         get('visit360', 'admin_'),
                         get('visit360_meta', 'admin_'),
-                        get('visits_checklist')
+                        get('visits_checklist'),
+                        
+                        get('edustat_app', 'admin_'),
+                        get('edustat_app_meta', 'admin_'),
+                        get('edustat_app'),
+                        get('edustat_app_meta')
                     ]);
                     s = adminSchools;
                     m = adminManpower;
@@ -981,6 +1021,7 @@ const App = () => {
                     setBaselineVisits(adminVisits || []);
                     setBaselineJhpmsLab(adminJhpms || []);
                     setBaselineEdustat(adminEdustat || []);
+                    setBaselineEdustatApp(adminEdustatApp || []);
 
                     userV = customVisits || [];
                     userJl = customJhpms || [];
@@ -993,6 +1034,13 @@ const App = () => {
                     vMeta = adminVMeta;
                     jlMeta = adminJlMeta;
                     eMeta = adminEMeta;
+
+                    const mergedEApp = mergeEdustatApp(adminEdustatApp || [], customEdustatApp || []);
+                    setEdustatApp(mergedEApp);
+                    setEdustatAppMeta(adminEdustatAppMeta);
+
+                    setUserEdustatApp(customEdustatApp || []);
+                    setUserEdustatAppMeta(customEdustatAppMeta);
                 }
 
                 if (p) {
@@ -1307,7 +1355,7 @@ const App = () => {
 
     // Filtered EduStat App Usage data according to active filters (Zone, Project, District, Block, CC, School, Date Range)
     const filteredEdustatApp = useMemo(() => {
-        if (!edustatApp || edustatApp.length === 0) return [];
+        if (!combinedEdustatApp || combinedEdustatApp.length === 0) return [];
 
         let fSchools = schools;
         if (selZones.length) fSchools = fSchools.filter(s => selZones.includes(s.zone));
@@ -1333,7 +1381,7 @@ const App = () => {
 
         const hasActiveFilter = (selZones.length > 0 || selProjects.length > 0 || selDistricts.length > 0 || selBlocks.length > 0 || selCCs.length > 0 || selSchools.length > 0);
 
-        return edustatApp
+        return combinedEdustatApp
             .filter(r => {
                 if (r.date && (r.date < startDate || r.date > endDate)) return false;
                 if (hasActiveFilter && r.udise && !validUdise.has(String(r.udise))) return false;
@@ -1343,7 +1391,7 @@ const App = () => {
                 const mappedName = r.udise ? schoolNameMap[String(r.udise)] : null;
                 return mappedName ? { ...r, schoolName: mappedName } : r;
             });
-    }, [edustatApp, schools, selZones, selProjects, selDistricts, selBlocks, selCCs, selSchools, startDate, endDate, ccNameMapping]);
+    }, [combinedEdustatApp, schools, selZones, selProjects, selDistricts, selBlocks, selCCs, selSchools, startDate, endDate, ccNameMapping]);
 
     // Secure Auto-Fetch from Google Sheets (via Netlify proxy)
     const fetchFromGoogleSheet = async () => {
@@ -1615,6 +1663,15 @@ const App = () => {
     }, [userRole, getAllowedUdiseSet]);
 
     const gateEdustat = useCallback((list) => {
+        if (userRole === 'admin') return list;
+        const allowedUdise = getAllowedUdiseSet();
+        return (list || []).filter(ed => {
+            const udise = ed.udise || ed.udise_code || '';
+            return udise && allowedUdise.has(String(udise));
+        });
+    }, [userRole, getAllowedUdiseSet]);
+
+    const gateEdustatApp = useCallback((list) => {
         if (userRole === 'admin') return list;
         const allowedUdise = getAllowedUdiseSet();
         return (list || []).filter(ed => {
@@ -2226,16 +2283,50 @@ const App = () => {
                             }
                         }
                     } else if (type === 'edustat_app') {
+                        const isTemp = uploadAsSession;
                         const meta = {
                             last_uploaded_at: new Date().toISOString(),
                             last_uploaded_by: localStorage.getItem('snet_username') || 'admin',
-                            is_temp: false
+                            is_temp: isTemp
                         };
-                        setEdustatApp(normalized);
-                        await set('edustat_app', normalized);
-                        setEdustatAppMeta(meta);
-                        await set('edustat_app_meta', meta);
-                        alert(`Successfully uploaded ${normalized.length.toLocaleString('en-IN')} EduStat Application Usage records!`);
+                        
+                        let merged;
+                        if (isTemp) {
+                            merged = mergeEdustatApp(tempEdustatApp, normalized);
+                            const skippedCount = (tempEdustatApp.length + normalized.length) - merged.length;
+                            const skippedMsg = skippedCount > 0 ? ` (${skippedCount} duplicate rows skipped)` : '';
+                            setTempEdustatApp(merged);
+                            sessionStorage.setItem('snet_temp_edustat_app', JSON.stringify(merged));
+                            sessionStorage.setItem('snet_temp_edustat_app_meta', JSON.stringify(meta));
+                            if (userRole === 'admin') {
+                                setEdustatAppMeta(meta);
+                            } else {
+                                setUserEdustatAppMeta(meta);
+                            }
+                            alert(`Successfully uploaded ${normalized.length} EduStat App Usage logs to temporary session!${skippedMsg}`);
+                        } else {
+                            const existing = await get('edustat_app') || [];
+                            merged = mergeEdustatApp(existing, normalized);
+                            const skippedCount = (existing.length + normalized.length) - merged.length;
+                            const skippedMsg = skippedCount > 0 ? ` (${skippedCount} duplicate rows skipped)` : '';
+                            await set('edustat_app', merged);
+                            await set('edustat_app_meta', meta);
+
+                            if (userRole === 'admin') {
+                                setEdustatApp(merged);
+                                setEdustatAppMeta(meta);
+                                alert(`Successfully uploaded and merged ${normalized.length} EduStat App Usage logs to Central Cloud!${skippedMsg}`);
+                            } else {
+                                const gatedUserApp = gateEdustatApp(merged);
+                                setUserEdustatApp(gatedUserApp);
+                                setUserEdustatAppMeta(meta);
+
+                                const activeApp = mergeEdustatApp(baselineEdustatApp, merged);
+                                const gatedActive = gateEdustatApp(activeApp);
+                                setEdustatApp(gatedActive);
+                                alert(`Successfully uploaded and merged ${normalized.length} EduStat App Usage logs as your personal cloud overlay!${skippedMsg}`);
+                            }
+                        }
                     } else if (type === 'edustat_master') {
                         if (userRole !== 'admin') {
                             alert("Access Denied: Only Administrator can upload EduStat Master Inventory.");
@@ -2343,7 +2434,7 @@ const App = () => {
                         visits: combinedVisits.length,
                         jhpms_lab: combinedJhpmsLab.length,
                         edustat: combinedEdustat.length,
-                        edustat_app: edustatApp.length,
+                        edustat_app: combinedEdustatApp.length,
                         edustat_master: edustatMaster.length,
                         manpower: manpower.length,
                         visit360: visit360.length
@@ -2352,7 +2443,7 @@ const App = () => {
                         visits: mergeVisits(userVisits, tempVisits).length,
                         jhpms_lab: mergeJhpms(userJhpmsLab, tempJhpmsLab).length,
                         edustat: mergeEdustat(userEdustat, tempEdustat).length,
-                        edustat_app: edustatApp.length,
+                        edustat_app: mergeEdustatApp(userEdustatApp, tempEdustatApp).length,
                         edustat_master: edustatMaster.length,
                         manpower: 0,
                         visit360: visit360.length
@@ -2366,7 +2457,7 @@ const App = () => {
                     visits={userRole === 'admin' ? combinedVisits : mergeVisits(userVisits, tempVisits)}
                     jhpmsLab={userRole === 'admin' ? combinedJhpmsLab : mergeJhpms(userJhpmsLab, tempJhpmsLab)}
                     edustat={userRole === 'admin' ? combinedEdustat : mergeEdustat(userEdustat, tempEdustat)}
-                    edustatApp={edustatApp}
+                    edustatApp={userRole === 'admin' ? combinedEdustatApp : mergeEdustatApp(userEdustatApp, tempEdustatApp)}
                     manpower={userRole === 'admin' ? manpower : []}
                     visit360={visit360}
                     ccNameMapping={ccNameMapping}
@@ -2381,7 +2472,7 @@ const App = () => {
                     activeVisits={combinedVisits}
                     activeJhpmsLab={combinedJhpmsLab}
                     activeEdustat={combinedEdustat}
-                    activeEdustatApp={edustatApp}
+                    activeEdustatApp={userRole === 'admin' ? combinedEdustatApp : mergeEdustatApp(userEdustatApp, tempEdustatApp)}
                     activeVisit360={visit360}
                     onDeleteRange={handleDeleteRange}
                 />
